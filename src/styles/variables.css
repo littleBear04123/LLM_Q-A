@@ -1,0 +1,55 @@
+/* 全局CSS变量 - 视觉基调 */
+:root {
+  /* 主色调 */
+  --primary-color: #61BFAD;
+  --primary-dark: #4da89a;
+  --primary-light: #7ac8b9;
+  
+  /* 文本颜色 */
+  --text-primary: #2c3e50;
+  --text-secondary: #64748b;
+  --text-muted: #9ca3af;
+  
+  /* 背景色 */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-page: #f5f5f5;
+  
+  /* 边框颜色 */
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --border-dark: #cbd5e1;
+  
+  /* 状态颜色 */
+  --success: #10b981;
+  --success-dark: #059669;
+  --warning: #f59e0b;
+  --warning-dark: #d97706;
+  --error: #ef4444;
+  --error-dark: #dc2626;
+  
+  /* 卡片样式 */
+  --card-bg: #ffffff;
+  --card-border: var(--border-color);
+  --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --card-shadow-hover: 0 6px 12px rgba(0, 0, 0, 0.08);
+  
+  /* 按钮样式 */
+  --btn-primary-bg: var(--primary-color);
+  --btn-primary-hover: var(--primary-dark);
+  --btn-secondary-bg: #f1f5f9;
+  --btn-secondary-text: var(--text-secondary);
+  --btn-success-bg: var(--success);
+  --btn-success-hover: var(--success-dark);
+  
+  /* 输入框样式 */
+  --input-border: var(--border-color);
+  --input-focus: var(--primary-color);
+  --input-focus-shadow: rgba(97, 191, 173, 0.2);
+  
+  /* 滚动条样式 */
+  --scrollbar-track: var(--bg-tertiary);
+  --scrollbar-thumb: var(--border-dark);
+  --scrollbar-thumb-hover: #94a3b8;
+}

@@ -1,0 +1,33 @@
+{
+  "name": "my-llm-app",
+  "version": "1.0.0",
+  "description": "LLM需求用例生成系统",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server.js",
+    "start": "node server.js",
+    "install-deps": "npm install better-sqlite3 cors cookie-parser uuid"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.1.0",
+    "better-sqlite3": "^9.0.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "element-plus": "^2.3.0",
+    "express": "^4.18.2",
+    "mermaid": "^8.14.0",
+    "node-fetch": "^3.3.2",
+    "pinia": "^2.1.0",
+    "plantuml-encoder": "^1.4.0",
+    "uuid": "^9.0.0",
+    "vue": "^3.3.0",
+    "vue-router": "^4 Zion"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.0",
+    "vite": "^4.4.0"
+  }
+}

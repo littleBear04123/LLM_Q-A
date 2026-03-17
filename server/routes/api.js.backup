@@ -1,0 +1,136 @@
+// 辅助函数：合并AI建议的状态更新与当前状态表
+function mergeStatusUpdates(currentTable, aiSuggestedUpdates) {
+    if (!aiSuggestedUpdates) return currentTable;
+    
+    const updatedTable = JSON.parse(JSON.stringify(currentTable)); // 深拷贝
+    
+    // 遍历AI建议的状态更新
+    for (const [field, components] of Object.entries(aiSuggestedUpdates)) {
+        if (updatedTable[field]) {
+            for (const [component, updateData] of Object.entries(components)) {
+                if (updatedTable[field][component] && updateData) {
+                    // 只有当AI提供了有效更新时才更新状态
+                    if (updateData.status) {
+                        updatedTable[field][component].status = updateData.status;
+                    }
+                    if (updateData.summary !== undefined) {
+                        updatedTable[field][component].summary = updateData.summary;
+                    }
+                }
+            }
+        }
+    }
+    
+    return updatedTable;
+}
+
+// 辅助函数：生成已收集信息的摘要
+function generateCollectedInfoSummary(statusTable) {
+    const collectedInfo = [];
+    
+    for (const [field, components] of Object.entries(statusTable)) {
+        for (const [component, data] of Object.entries(components)) {
+            if (data.status === 'collected' && data.summary) {
+                collectedInfo.push(`${field}.${component}: ${data.summary}`);
+            }
+        }
+    }
+    
+    if (collectedInfo.length === 0) {
+        return '暂无已收集的信息。';
+    }
+    
+    return collectedInfo.join('\n');
+}
+
+// 辅助函数：统计已收集的项目数
+function countCollectedItems(statusTable) {
+    let count = 0;
+    
+    for (const field of Object.values(statusTable)) {
+        for (const component of Object.values(field)) {
+            if (component.status === 'collected') {
+                count++;
+            }
+        }
+    }
+    
+    return count;
+}
+
+// 辅助函数：解析AI回复，提取纯净内容并更新状态表
+function parseAIReply(reply, currentStatusTable) {
+    let parsedReply = reply;
+    let updatedTable = { ...currentStatusTable };
+
+    // 解析新的状态表格式
+    const newFormatMatch = reply.match(/【状态表】([\s\S]*?)【下一问题】([\s\S]*)/);
+    if (newFormatMatch) {
+        const tableText = newFormatMatch[1];
+        parsedReply = newFormatMatch[2].trim();
+        
+        // 解析状态表更新
+        const lines = tableText.split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+            // 解析 "领域.组件: 状态，摘要="..." 格式的更新
+            const match = line.match(/([^.]+)\.([^:]+):\s*([^,]+)，摘要="([^"]*)"/);
+            if (match) {
+                const [, category, component, status, summary] = match;
+                
+                // 映射中文领域名到英文键名
+                const categoryKey = mapChineseCategoryToEnglish(category.trim());
+                const componentKey = mapChineseComponentToEnglish(component.trim());
+                
+                if (categoryKey && componentKey && updatedTable[categoryKey] && updatedTable[categoryKey][componentKey]) {
+                    updatedTable[categoryKey][componentKey].status = status.trim();
+                    updatedTable[categoryKey][componentKey].summary = summary.trim();
+                }
+            }
+        });
+    } else {
+        // 解析旧格式
+        const legacyStatusUpdateMatch = reply.match(/【状态更新】([\s\S]*?)【下一问题】/);
+        if (legacyStatusUpdateMatch) {
+            const updateText = legacyStatusUpdateMatch[1];
+            const updateLines = updateText.split('\n').filter(line => line.trim());
+            
+            updateLines.forEach(line => {
+                const match = line.match(/[-*]\s*([^.]+)\.([^:]+):\s*([^,]+)，摘要="([^"]*)"/);
+                if (match) {
+                    const [, category, component, status, summary] = match;
+                    if (updatedTable[category] && updatedTable[category][component]) {
+                        updatedTable[category][component].status = status.trim();
+                        updatedTable[category][component].summary = summary.trim();
+                    }
+                }
+            });
+            
+            const nextQuestionMatch = reply.match(/【下一问题】([\s\S]*)/);
+            if (nextQuestionMatch) {
+                parsedReply = nextQuestionMatch[1].trim();
+            }
+        }
+    }
+
+    // 清理回复内容
+    parsedReply = parsedReply.replace(/【.*?】/g, '').trim(); // 移除所有标签
+    parsedReply = parsedReply.replace(/\*\*.*?\*\*/g, '').trim(); // 移除粗体标记
+    parsedReply = parsedReply.replace(/\n{3,}/g, '\n\n').trim(); // 规范化换行
+
+    // 清理多余的星号
+    parsedReply = parsedReply.replace(/\*\*/g, '');
+    
+    // 清理多余的分隔符和空行
+    parsedReply = parsedReply.replace(/-{3,}/g, '');
+    parsedReply = parsedReply.replace(/={10,}/g, '');
+    
+    // 清理多余的空白字符
+    parsedReply = parsedReply.replace(/\s+/g, ' ').trim();
+    
+    // 如果清理后的回复不为空，则使用清理后的回复
+    if (parsedReply.trim()) {
+        parsedReply = parsedReply;
+    }
+    
+    return { parsedReply, updatedStatusTable: updatedTable };
+}
