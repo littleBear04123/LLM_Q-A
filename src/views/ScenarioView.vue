@@ -230,7 +230,7 @@ const loadUseCaseInfo = async () => {
 
 // 计算领域进度和细节进度
 const domainProgress = computed(() => {
-  if (!scenarioStore.statusTable) return { completed: 0, total: 5, details: { completed: 0, total: 29 } };
+  if (!scenarioStore.statusTable) return { domains: { completed: 0, total: 5 }, details: { completed: 0, total: 29 } };
   
   console.log('状态表内容:', scenarioStore.statusTable); // 调试信息
   
@@ -238,35 +238,51 @@ const domainProgress = computed(() => {
   let totalItems = 0;
   let completedItems = 0;
   
-  for (const category in scenarioStore.statusTable) {
+  // 适配后端返回的状态表结构
+  const statusTable = scenarioStore.statusTable;
+  
+  // 遍历所有领域
+  const categories = Object.keys(statusTable);
+  console.log('领域列表:', categories); // 调试信息
+  
+  for (const category of categories) {
     console.log('处理领域:', category); // 调试信息
     let domainComplete = true;
-    for (const item in scenarioStore.statusTable[category]) {
-      console.log('处理项目:', item, scenarioStore.statusTable[category][item]); // 调试信息
-      totalItems++;
-      if (scenarioStore.statusTable[category][item].status === 'collected') {
-        completedItems++;
-        console.log('项目已收集:', item); // 调试信息
-      } else {
-        domainComplete = false;
-        console.log('项目未收集:', item); // 调试信息
+    const components = statusTable[category];
+    
+    if (components && typeof components === 'object') {
+      const componentKeys = Object.keys(components);
+      console.log('领域', category, '包含的组件:', componentKeys); // 调试信息
+      
+      for (const item of componentKeys) {
+        const component = components[item];
+        console.log('处理项目:', item, component); // 调试信息
+        totalItems++;
+        if (component && component.status === 'collected') {
+          completedItems++;
+          console.log('项目已收集:', item); // 调试信息
+        } else {
+          domainComplete = false;
+          console.log('项目未收集:', item); // 调试信息
+        }
       }
-    }
-    if (domainComplete) {
-      completedDomains++;
-      console.log('领域完成:', category); // 调试信息
+      
+      if (domainComplete) {
+        completedDomains++;
+        console.log('领域完成:', category); // 调试信息
+      }
     }
   }
   
   // 确保总项目数至少为29
   const totalDetails = Math.max(totalItems, 29);
   console.log('进度计算结果:', { 
-    domains: { completed: completedDomains, total: 5 },
+    domains: { completed: completedDomains, total: categories.length },
     details: { completed: completedItems, total: totalDetails }
   }); // 调试信息
   
   return { 
-    domains: { completed: completedDomains, total: 5 },
+    domains: { completed: completedDomains, total: categories.length },
     details: { completed: completedItems, total: totalDetails }
   };
 });
@@ -280,14 +296,22 @@ const isScenarioReady = computed(() => {
   let collectedCount = 0;
   let totalCount = 0;
   
-  for (const category in scenarioStore.statusTable) {
-    for (const item in scenarioStore.statusTable[category]) {
-      totalCount++;
-      if (scenarioStore.statusTable[category][item].status === 'collected') {
-        collectedCount++;
+  const statusTable = scenarioStore.statusTable;
+  
+  for (const category in statusTable) {
+    const components = statusTable[category];
+    if (components && typeof components === 'object') {
+      for (const item in components) {
+        const component = components[item];
+        totalCount++;
+        if (component && component.status === 'collected') {
+          collectedCount++;
+        }
       }
     }
   }
+  
+  console.log('场景准备状态计算:', { collectedCount, totalCount, ready: collectedCount >= 15 }); // 调试信息
   
   // 当至少收集了总数的一定比例（例如 15/29 ≈ 52%）时认为可以生成场景
   // 或者可以根据业务逻辑设定更精确的标准

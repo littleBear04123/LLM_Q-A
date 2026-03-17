@@ -366,6 +366,46 @@ getUnfinishedScenarios: (userId) => {
             console.error('Error in getMessageHistory:', error);
             throw error;
         }
+    },
+
+    // 获取会话信息（新增方法）
+    getSessionById: (sessionId) => {
+        try {
+            const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
+            return stmt.get(sessionId);
+        } catch (error) {
+            console.error('Error in getSessionById:', error);
+            throw error;
+        }
+    },
+
+    // 更新会话状态表（修复版本）
+    updateSessionStatusTable: (sessionId, statusTable) => {
+        try {
+            // 直接在sessions表中添加status_table字段
+            // 首先检查sessions表是否有status_table字段
+            const checkStmt = db.prepare(`PRAGMA table_info(sessions)`);
+            const columns = checkStmt.all();
+            const hasStatusTable = columns.some(col => col.name === 'status_table');
+            
+            if (!hasStatusTable) {
+                // 添加status_table字段
+                db.exec(`ALTER TABLE sessions ADD COLUMN status_table TEXT`);
+                console.log('✅ 已为sessions表添加status_table字段');
+            }
+            
+            // 更新会话的状态表
+            const stmt = db.prepare(`
+                UPDATE sessions 
+                SET status_table = ?, last_active = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            `);
+            stmt.run(statusTable, sessionId);
+            console.log('✅ 状态表已保存到会话:', sessionId);
+        } catch (error) {
+            console.error('Error in updateSessionStatusTable:', error);
+            throw error;
+        }
     }
 };
 

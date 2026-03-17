@@ -273,6 +273,7 @@ actor 读者
         ],
         stream: false,
         max_tokens: 2048,
+        max_context_length: 131072, // 128K tokens
         temperature: 0.1
     };
 

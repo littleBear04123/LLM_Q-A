@@ -9,13 +9,22 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 // 会话状态管理函数
 async function getSessionStatusTable(sessionId) {
     try {
+        console.log(`🔍 获取会话 ${sessionId} 的状态表`);
         // 从数据库获取当前会话的状态表
         const session = await userModel.getSessionById(sessionId);
+        console.log('会话信息:', session);
+        
         if (session && session.status_table) {
-            return JSON.parse(session.status_table);
+            console.log('✅ 找到已保存的状态表');
+            const parsedTable = JSON.parse(session.status_table);
+            console.log('已保存的状态表内容:', JSON.stringify(parsedTable, null, 2));
+            return parsedTable;
         }
         // 如果没有找到，返回初始状态表
-        return createInitialStatusTable();
+        console.log('⚠️ 未找到状态表，返回初始状态表');
+        const initialTable = createInitialStatusTable();
+        console.log('初始状态表:', JSON.stringify(initialTable, null, 2));
+        return initialTable;
     } catch (error) {
         console.error('获取会话状态表失败:', error);
         return createInitialStatusTable();
@@ -217,23 +226,56 @@ function mergeStatusUpdates(currentTable, aiSuggestedUpdates) {
     
     const updatedTable = JSON.parse(JSON.stringify(currentTable)); // 深拷贝
     
+    console.log('🔍 合并状态表更新:');
+    console.log('当前状态表:', JSON.stringify(currentTable, null, 2));
+    console.log('AI建议更新:', JSON.stringify(aiSuggestedUpdates, null, 2));
+    
+    // 映射AI返回的字段名到数据库字段名
+    const fieldMapping = {
+        'actionerField': 'actor',
+        'intentionField': 'intention',
+        'taskField': 'task',
+        'environmentField': 'environment',
+        'communicationField': 'communication'
+    };
+    
     // 遍历AI建议的状态更新
     for (const [field, components] of Object.entries(aiSuggestedUpdates)) {
-        if (updatedTable[field]) {
-            for (const [component, updateData] of Object.entries(components)) {
-                if (updatedTable[field][component] && updateData) {
-                    // 只有当AI提供了有效更新时才更新状态
-                    if (updateData.status) {
-                        updatedTable[field][component].status = updateData.status;
-                    }
-                    if (updateData.summary !== undefined) {
-                        updatedTable[field][component].summary = updateData.summary;
-                    }
+        // 映射字段名
+        const mappedField = fieldMapping[field] || field;
+        
+        console.log(`处理字段: ${field} -> ${mappedField}`);
+        
+        // 如果字段不存在，创建它
+        if (!updatedTable[mappedField]) {
+            console.log(`创建新字段: ${mappedField}`);
+            updatedTable[mappedField] = {};
+        }
+        
+        for (const [component, updateData] of Object.entries(components)) {
+            console.log(`处理组件: ${component}`, updateData);
+            
+            // 如果组件不存在，创建它
+            if (!updatedTable[mappedField][component]) {
+                console.log(`创建新组件: ${mappedField}.${component}`);
+                updatedTable[mappedField][component] = { status: 'pending', summary: '' };
+            }
+            
+            if (updateData) {
+                // 只有当AI提供了有效更新时才更新状态
+                if (updateData.status) {
+                    console.log(`更新状态: ${mappedField}.${component} -> ${updateData.status}`);
+                    updatedTable[mappedField][component].status = updateData.status;
+                }
+                if (updateData.summary !== undefined && updateData.summary !== '') {
+                    console.log(`更新摘要: ${mappedField}.${component} -> ${updateData.summary.substring(0, 50)}...`);
+                    updatedTable[mappedField][component].summary = updateData.summary;
                 }
             }
         }
     }
     
+    console.log('✅ 合并后的状态表:', JSON.stringify(updatedTable, null, 2));
     return updatedTable;
 }
 
@@ -431,6 +473,14 @@ async function callDeepSeekAPI(prompt, context = null) {
             
             systemPrompt = `${contextInfo}\n\n${systemPrompt}`;
         }
+        
+        // 增强提示词，明确要求AI更新状态表
+        systemPrompt += `\n\n重要指导原则：\n` +
+                        `1. 每次提问后，必须根据用户的回答更新相应的状态表组件\n` +
+                        `2. 避免重复询问已经收集到的信息\n` +
+                        `3. 根据已收集的信息，提出新的、未收集的细节问题\n` +
+                        `4. 确保状态更新准确反映用户提供的信息\n` +
+                        `5. 当大部分信息收集完成后，可以开始总结和生成场景`;
 
 
         messages.push({ role: 'system', content: systemPrompt });
@@ -454,6 +504,7 @@ async function callDeepSeekAPI(prompt, context = null) {
                 model: 'deepseek-chat',
                 messages: messages,
                 stream: false,
+                max_context_length: 131072, // 128K tokens
                 response_format: { "type": "json_object" }  // 请求JSON格式的响应
             })
         });
@@ -521,7 +572,8 @@ async function callSimpleScenarioAPI(prompt, systemPrompt) {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: prompt }
             ],
-            stream: false
+            stream: false,
+            max_context_length: 131072 // 128K tokens
         })
     });
 
