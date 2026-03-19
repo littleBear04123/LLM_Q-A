@@ -790,4 +790,53 @@ ${initialInput}
     }
 });
 
+// 保存编辑后的场景内容
+router.post('/scenarios/save-edited', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const { projectId, useCaseId, content } = req.body;
+        
+        if (!projectId || !useCaseId || typeof content !== 'string') {
+            return res.status(400).json({ error: '缺少必要参数：projectId、useCaseId或content' });
+        }
+
+        console.log('📝 保存编辑后的场景内容:', { projectId, useCaseId, contentLength: content.length });
+
+        // 获取用户现有的场景（如果有）
+        const existingScenarios = userModel.getScenariosByUseCase(useCaseId);
+        let scenarioId;
+
+        if (existingScenarios && existingScenarios.length > 0) {
+            // 如果已存在场景，则更新第一个场景的内容
+            scenarioId = existingScenarios[0].id;
+            userModel.updateScenarioContent(scenarioId, content, JSON.stringify(createInitialStatusTable()));
+            console.log('✏️ 更新现有场景，ID:', scenarioId);
+        } else {
+            // 如果没有现有场景，则创建新场景
+            scenarioId = userModel.createScenario(
+                req.session.user_id,
+                projectId,
+                useCaseId,
+                req.session.id,
+                `Edited Scenario for Use Case ${useCaseId}`,
+                content
+            );
+            console.log('🆕 创建新场景，ID:', scenarioId);
+        }
+
+        res.json({
+            success: true,
+            message: '场景已保存',
+            scenarioId: scenarioId
+        });
+
+    } catch (error) {
+        console.error('❌ 保存编辑的场景失败:', error);
+        res.status(500).json({ error: '保存编辑的场景失败: ' + error.message });
+    }
+});
+
 module.exports = router;

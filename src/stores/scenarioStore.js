@@ -324,6 +324,45 @@ export const useScenarioStore = defineStore('scenario', {
         localStorage.removeItem(storageKey);
         localStorage.removeItem(statusKey);
       }
+    },
+    
+    // 保存编辑后的场景内容到服务器
+    async saveEditedScenario() {
+      const userStore = useUserStore();
+      const projectId = this.currentScenario?.projectId;
+      const useCaseId = this.currentScenario?.useCaseId;
+      
+      if (!projectId || !useCaseId) {
+        throw new Error('缺少项目ID或用例ID，无法保存场景');
+      }
+      
+      try {
+        const response = await fetch('/api/scenarios/save-edited', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Token': userStore.sessionToken
+          },
+          body: JSON.stringify({
+            projectId: parseInt(projectId),
+            useCaseId: parseInt(useCaseId),
+            content: this.generatedContent
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: '保存编辑的场景失败' }));
+          throw new Error(errorData.error || '保存编辑的场景失败');
+        }
+        
+        const data = await response.json();
+        this.lastSuccessMessage = '场景已保存';
+        return data;
+      } catch (error) {
+        console.error('保存编辑的场景失败:', error);
+        this.lastErrorMessage = error.message || '保存编辑的场景失败';
+        throw error;
+      }
     }
   }
 })

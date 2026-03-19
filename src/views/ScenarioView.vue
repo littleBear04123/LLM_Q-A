@@ -114,7 +114,12 @@
           <div class="preview-content">
             <div v-if="scenarioStore.generatedContent">
               <h4>生成的场景:</h4>
-              <pre class="generated-scenario">{{ scenarioStore.generatedContent }}</pre>
+              <textarea 
+                v-model="scenarioStore.generatedContent" 
+                class="editable-scenario" 
+                rows="15"
+                placeholder="在这里编辑生成的场景..."
+              ></textarea>
             </div>
             <div v-else-if="scenarioStore.isGenerating" class="generating-state">
               <p>正在生成场景，请稍候...</p>
@@ -626,9 +631,14 @@ const saveScenario = async () => {
     return;
   }
   
-  // 在我们的系统中，场景在生成时已经自动保存到数据库了
-  // 所以这里只需提醒用户场景已保存
-  alert('场景已保存到数据库！');
+  try {
+    // 调用store中的方法保存编辑后的场景
+    await scenarioStore.saveEditedScenario();
+    alert('场景已保存到数据库！');
+  } catch (error) {
+    console.error('保存场景失败:', error);
+    alert('保存场景失败: ' + error.message);
+  }
 };
 </script>
 
@@ -1024,6 +1034,26 @@ body {
   font-family: Arial, sans-serif;
   line-height: 1.6;
   color: #2c3e50;
+}
+
+.editable-scenario {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  color: #2c3e50;
+  resize: vertical;
+  font-size: 14px;
+  background-color: #f9fafb;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.editable-scenario:focus {
+  outline: none;
+  border-color: #61BFAD;
+  box-shadow: 0 0 0 3px rgba(97, 191, 173, 0.2);
 }
 
 .generating-state {
