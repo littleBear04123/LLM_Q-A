@@ -1,24 +1,22 @@
-// server/routes/api.js
 const express = require('express');
+// server/routes/api.js
 const router = express.Router();
 const { userModel } = require('../database');
 const { createInitialStatusTable, statusTableToText } = require('../utils');
 const { DIALOGUE_SYSTEM_PROMPT, SIMPLE_GENERATION_PROMPT } = require('../config/prompts');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-// 会话状态管理函数
-async function getSessionStatusTable(sessionId) {
+// 场景状态管理函数
+async function getScenarioStatusTable(scenarioId) {
     try {
-        console.log(`🔍 获取会话 ${sessionId} 的状态表`);
-        // 从数据库获取当前会话的状态表
-        const session = await userModel.getSessionById(sessionId);
-        console.log('会话信息:', session);
+        console.log(`🔍 获取场景 ${scenarioId} 的状态表`);
+        // 从数据库获取当前场景的状态表
+        const statusTable = userModel.getScenarioStatusTable(scenarioId);
         
-        if (session && session.status_table) {
+        if (statusTable) {
             console.log('✅ 找到已保存的状态表');
-            const parsedTable = JSON.parse(session.status_table);
-            console.log('已保存的状态表内容:', JSON.stringify(parsedTable, null, 2));
-            return parsedTable;
+            console.log('已保存的状态表内容:', JSON.stringify(statusTable, null, 2));
+            return statusTable;
         }
         // 如果没有找到，返回初始状态表
         console.log('⚠️ 未找到状态表，返回初始状态表');
@@ -26,37 +24,27 @@ async function getSessionStatusTable(sessionId) {
         console.log('初始状态表:', JSON.stringify(initialTable, null, 2));
         return initialTable;
     } catch (error) {
-        console.error('获取会话状态表失败:', error);
+        console.error('获取场景状态表失败:', error);
         return createInitialStatusTable();
     }
 }
 
-async function updateSessionStatusTable(sessionId, statusTable) {
+async function updateScenarioStatusTable(scenarioId, statusTable) {
     try {
-        await userModel.updateSessionStatusTable(sessionId, JSON.stringify(statusTable));
+        await userModel.updateScenarioStatusTable(scenarioId, statusTable);
     } catch (error) {
-        console.error('更新会话状态表失败:', error);
+        console.error('更新场景状态表失败:', error);
     }
 }
 
-async function getRecentMessages(sessionId, limit = 10) {
-    try {
-        return userModel.getMessageHistory(sessionId, limit);
-    } catch (error) {
-        console.error('获取消息历史失败:', error);
-        return [];
-    }
-}
-
-// 获取最近的对话历史
-async function getRecentChatHistory(sessionId) {
-    if (!sessionId) {
-        return []; // 如果没有session ID，返回空历史
+async function getRecentChatHistory(scenarioId) {
+    if (!scenarioId) {
+        return []; // 如果没有scenario ID，返回空历史
     }
     
     try {
-        // 从数据库获取最近的对话历史
-        const recentMessages = userModel.getMessageHistory(sessionId, 20); // 获取最近20条消息
+        // 从数据库获取指定场景的消息历史
+        const recentMessages = userModel.getMessageHistory(scenarioId, 20); // 获取最近20条消息
         
         // 将数据库中的消息转换为API所需的格式
         const chatHistory = [];
@@ -105,7 +93,9 @@ router.use(validateSession);
 
 router.get('/history', async (req, res) => {
     try {
-        const messages = userModel.getMessageHistory(req.session.id, 20);
+        // 对于历史记录路由，我们暂时返回空数组，因为需要知道具体的场景ID才能获取消息
+        // 实际应用中，可能需要重构此API以接收场景ID参数
+        const messages = [];
         res.json({ messages });
     } catch (error) {
         console.error('History error:', error);
@@ -114,10 +104,15 @@ router.get('/history', async (req, res) => {
 });
 
 router.post('/message', async (req, res) => {
-    const { role, content } = req.body;
+    const { role, content, scenarioId } = req.body;
+
+    // 需要提供场景ID来保存消息
+    if (!scenarioId) {
+        return res.status(400).json({ error: '缺少场景ID' });
+    }
 
     try {
-        const messageId = userModel.saveMessage(req.session.id,role, content);
+        const messageId = userModel.saveMessage(scenarioId, role, content);
         res.json({ success: true, messageId });
     } catch (error) {
         console.error('Message save error:', error);
@@ -603,18 +598,34 @@ router.post('/chat', async (req, res) => {
     }
 
     try {
-        // 1. 保存用户消息到数据库
-        userModel.saveMessage(sessionId, 'user', userMessage);
+        // 需要根据上下文获取useCaseId
+        const useCaseId = context?.useCaseId;
+        if (!useCaseId) {
+            return res.status(400).json({ error: '缺少用例ID' });
+        }
+        
+        // 获取或创建场景
+        let scenario = userModel.getScenarioByUseCase(useCaseId);
+        if (!scenario) {
+            // 如果没有找到场景，创建一个新场景
+            const title = "需求收集场景"; // 可以根据userMessage生成标题
+            scenario = {
+                id: userModel.createScenario(useCaseId, title, userMessage)
+            };
+        }
+        
+        // 1. 保存用户消息到数据库（现在关联到场景ID而不是会话ID）
+        userModel.saveMessage(scenario.id, 'user', userMessage);
 
-        // 2. 获取当前会话的状态表和对话历史
+        // 2. 获取当前场景的状态表和对话历史
         const [statusTable, recentMessages] = await Promise.all([
-            getSessionStatusTable(sessionId),
-            getRecentMessages(sessionId, 6)
+            getScenarioStatusTable(scenario.id),
+            getRecentChatHistory(scenario.id)
         ]);
 
-        // 3. 构造发送给AI的提示词（不再包含状态表，只包含已收集的信息摘要）
+        // 3. 构造发送给AI的提示词（包含已收集的信息摘要）
         let enhancedPrompt;
-        if (recentMessages.length === 0) {
+        if (recentMessages.length <= 2) { // 用户消息刚刚被添加，所以历史可能只有少量消息
             // 如果是首次对话，使用专门的初始提示词
             enhancedPrompt = `您好，我是您的需求工程顾问。请告诉我您想设计什么场景？比如'用户登录系统'、'客户下单购买'或'员工提交报销'。我会通过提问帮助您完善这个场景的细节，最后生成完整的场景文档。
 
@@ -651,16 +662,17 @@ ${collectedInfoSummary}
         const updatedStatusTable = mergeStatusUpdates(statusTable, aiSuggestedStatusUpdate);
 
         // 7. 保存更新后的状态表
-        await updateSessionStatusTable(sessionId, updatedStatusTable);
+        await updateScenarioStatusTable(scenario.id, updatedStatusTable);
 
         // 8. 保存AI回复到数据库（只保存问题部分）
-        userModel.saveMessage(sessionId, 'assistant', nextQuestion);
+        userModel.saveMessage(scenario.id, 'assistant', nextQuestion);
 
         console.log('AI回复内容:', nextQuestion.substring(0, 100) + '...');
         res.json({ 
             reply: nextQuestion,
             statusTable: updatedStatusTable,
-            collectedCount: countCollectedItems(updatedStatusTable) // 返回已收集项的数量
+            collectedCount: countCollectedItems(updatedStatusTable), // 返回已收集项的数量
+            scenarioId: scenario.id // 返回场景ID以便前端跟踪
         });
 
     } catch (error) {
@@ -679,8 +691,22 @@ router.post('/generate', async (req, res) => {
 
     try {
         const { projectId, useCaseId, title, initialInput } = req.body;
-        const sessionId = req.session.id;
-        const statusTable = await getSessionStatusTable(sessionId);
+        
+        // 从场景相关的消息历史获取上下文
+        let scenarioDB = userModel.getScenarioByUseCase(useCaseId);
+        if (!scenarioDB) {
+            // 如果没有找到场景，创建一个新场景
+            scenarioDB = {
+                id: userModel.createScenario(useCaseId, title || "需求收集场景", initialInput || "")
+            };
+        }
+        
+        // 获取对话历史和状态表作为上下文
+        const [chatHistory, statusTable] = await Promise.all([
+            getRecentChatHistory(scenarioDB.id),
+            getScenarioStatusTable(scenarioDB.id)
+        ]);
+        const context = chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
         
         const generationPrompt = `${SIMPLE_GENERATION_PROMPT}\n\n基于以下收集到的完整信息，生成一个结构化的场景文档（包含基本流、备选流、异常流）：\n\n${statusTableToText(statusTable)}`;
 
@@ -698,16 +724,18 @@ router.post('/generate', async (req, res) => {
         cleanedScenario = cleanedScenario.trim();
 
         // 保存生成的场景到数据库
-        if (projectId && useCaseId) {
-            const scenarioId = userModel.createScenario(
-                req.session.user_id, 
-                projectId, 
-                useCaseId, 
-                sessionId, 
-                title, 
-                cleanedScenario,
-                'completed'
-            );
+        if (useCaseId) {
+            // 如果场景已存在，更新它；否则创建新场景
+            if (scenarioDB.id) {
+                // 获取当前状态表
+                const currentStatusTable = await getScenarioStatusTable(scenarioDB.id);
+                // 更新现有场景的内容和状态表
+                userModel.updateScenarioContent(scenarioDB.id, cleanedScenario, JSON.stringify(currentStatusTable));
+            } else {
+                // 创建新场景（这种情况理论上不应该发生，因为我们已经在前面创建了）
+                scenarioDB.id = userModel.createScenario(useCaseId, title, cleanedScenario);
+            }
+            const scenarioId = scenarioDB.id;
             
             res.json({ 
                 success: true, 
@@ -735,7 +763,6 @@ router.post('/generate-simple', async (req, res) => {
 
     try {
         const { projectId, useCaseId, title, initialInput } = req.body;
-        const sessionId = req.session.id;
         
         console.log('🔍 简单场景生成请求:', { projectId, useCaseId, title });
         
@@ -762,15 +789,20 @@ ${initialInput}
         cleanedScenario = cleanedScenario.trim();
 
         // 保存生成的场景到数据库
-        if (projectId && useCaseId) {
-            const scenarioId = userModel.createScenario(
-                req.session.user_id, 
-                projectId, 
-                useCaseId, 
-                sessionId, 
-                title, 
-                initialInput
-            );
+        if (useCaseId) {
+            // 检查是否已存在场景，如果存在则更新，否则创建新场景
+            let scenarioDB = userModel.getScenarioByUseCase(useCaseId);
+            let scenarioId;
+            if (scenarioDB) {
+                // 获取当前状态表
+                const currentStatusTable = await getScenarioStatusTable(scenarioDB.id);
+                // 更新现有场景的内容和状态表
+                userModel.updateScenarioContent(scenarioDB.id, cleanedScenario, JSON.stringify(currentStatusTable));
+                scenarioId = scenarioDB.id;
+            } else {
+                // 创建新场景
+                scenarioId = userModel.createScenario(useCaseId, title, cleanedScenario);
+            }
             
             console.log('💾 保存场景到数据库，ID:', scenarioId);
             
@@ -812,18 +844,14 @@ router.post('/scenarios/save-edited', async (req, res) => {
         if (existingScenarios && existingScenarios.length > 0) {
             // 如果已存在场景，则更新第一个场景的内容
             scenarioId = existingScenarios[0].id;
-            userModel.updateScenarioContent(scenarioId, content, JSON.stringify(createInitialStatusTable()));
+            // 获取当前状态表
+            const currentStatusTable = await getScenarioStatusTable(scenarioId);
+            // 更新现有场景的内容和状态表
+            userModel.updateScenarioContent(scenarioId, content, JSON.stringify(currentStatusTable));
             console.log('✏️ 更新现有场景，ID:', scenarioId);
         } else {
             // 如果没有现有场景，则创建新场景
-            scenarioId = userModel.createScenario(
-                req.session.user_id,
-                projectId,
-                useCaseId,
-                req.session.id,
-                `Edited Scenario for Use Case ${useCaseId}`,
-                content
-            );
+            scenarioId = userModel.createScenario(useCaseId, `Edited Scenario for Use Case ${useCaseId}`, content);
             console.log('🆕 创建新场景，ID:', scenarioId);
         }
 
@@ -838,5 +866,362 @@ router.post('/scenarios/save-edited', async (req, res) => {
         res.status(500).json({ error: '保存编辑的场景失败: ' + error.message });
     }
 });
+
+// 生成场景图
+router.post('/scenarios/:useCaseId/generate-diagram', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const useCaseId = req.params.useCaseId;
+        const { scenarioContent, projectId } = req.body;
+        
+        if (!scenarioContent || typeof scenarioContent !== 'string') {
+            return res.status(400).json({ error: '缺少场景内容' });
+        }
+
+        console.log('🎨 开始生成场景图，用例ID:', useCaseId, '项目ID:', projectId);
+
+        // 从数据库获取场景内容
+        const scenarios = userModel.getScenariosByUseCase(useCaseId);
+        let contentToUse = scenarioContent;
+        
+        if (scenarios && scenarios.length > 0) {
+            // 使用数据库中的最新场景内容
+            contentToUse = scenarios[0].generated_scenario || scenarioContent;
+        }
+
+        // 调用AI生成PlantUML代码
+        const plantUmlCode = await generateScenarioDiagramWithAI(contentToUse);
+
+        res.json({
+            success: true,
+            diagramCode: plantUmlCode,  // 返回单个图表的代码
+            message: '场景图生成成功'
+        });
+
+    } catch (error) {
+        console.error('❌ 生成场景图失败:', error);
+        res.status(500).json({ error: '生成场景图失败: ' + error.message });
+    }
+});
+
+// 获取场景消息历史API
+router.get('/scenarios/:useCaseId/messages', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const useCaseId = req.params.useCaseId;
+        
+        // 获取与用例关联的场景
+        const scenario = userModel.getScenarioByUseCase(useCaseId);
+        if (!scenario) {
+            return res.status(404).json({ error: '未找到相关场景' });
+        }
+
+        // 获取该场景的消息历史
+        const messages = userModel.getMessageHistory(scenario.id);
+        
+        res.json({
+            success: true,
+            messages: messages,
+            scenarioId: scenario.id
+        });
+
+    } catch (error) {
+        console.error('获取场景消息历史失败:', error);
+        res.status(500).json({ error: '获取消息历史失败: ' + error.message });
+    }
+});
+
+// 代理PlantUML渲染请求
+router.post('/plantuml/render', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const { plantumlCode } = req.body;
+        
+        if (!plantumlCode || typeof plantumlCode !== 'string') {
+            return res.status(400).json({ error: '缺少PlantUML代码' });
+        }
+
+        console.log('收到PlantUML渲染请求，代码长度:', plantumlCode.length);
+
+        // 清理PlantUML代码，修复常见语法错误
+        // const cleanPlantUmlCode = (code) => {
+        //     // 移除PlantUML代码中的错误语法，如 if (...) then (...) 中的标签
+        //     let cleaned = code
+        //         // 修复 $1 占位符问题，替换为有意义的条件
+        //         .replace(/if\s*\(\$1\)/g, 'if (条件满足)')
+        //         .replace(/if\s*\(\s*\)/g, 'if (条件)')
+                
+        //         // 移除 if-then-else 中的标签，如 (是), (否), (成功), (失败) 等
+        //         .replace(/if\s*\([^)]+\)\s+then\s*\([^)]+\)/g, 'if ($1) then')
+        //         .replace(/else\s*\([^)]+\)/g, 'else')
+        //         .replace(/elseif\s*\([^)]+\)/g, 'elseif')
+                
+        //         // 修复 repeat 结构，确保有结束标记
+        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*repeat again/g, 'repeat\n$1end repeat')
+        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*repeat\s+again/g, 'repeat\n$1end repeat')
+        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*->\s*BACK/g, 'repeat\n$1end repeat')
+                
+        //         // 修复可能的未闭合结构
+        //         .replace(/repeat\s*\n((?:(?!repeat|end)[^\n]*\n?)*)\s*(?=partition|stop|@enduml)/g, 'repeat\n$1end repeat\n')
+                
+        //         // 修复未闭合的if结构
+        //         .replace(/if\s*\([^)]+\)\s+then\s*\n((?:(?!if|endif)[^\n]*\n?)*)\s*(?=partition|stop|@enduml)/g, 'if ($1) then\n$2endif\n')
+                
+        //         // 确保每行开头没有多余的空白
+        //         .split('\n')
+        //         .map(line => line.trim())
+        //         .join('\n')
+                
+        //         // 确保@startuml和@enduml标签单独占一行
+        //         .replace(/@startuml/g, '\n@startuml\n')
+        //         .replace(/@enduml/g, '\n@enduml\n')
+                
+        //         // 清理多余的空白行
+        //         .replace(/\n\s*\n\s*\n/g, '\n\n')
+        //         .trim();
+                
+        //     return cleaned;
+        // };
+
+        // const cleanedCode = cleanPlantUmlCode(plantumlCode);
+        // console.log('处理后的PlantUML代码:', cleanedCode.substring(0, 200) + '...'); // 调试信息
+
+        // 使用plantuml-encoder库进行编码（与用例图相同的方式）
+        const plantumlEncoder = require('plantuml-encoder');
+        const encodedCode = plantumlEncoder.encode(plantumlCode);
+        
+        // 备用服务器列表（与用例图类似）
+        const plantUmlServers = [
+            `https://www.plantuml.com/plantuml/svg/${encodedCode}`,
+            `https://plantuml-server.kkeisuke.com/svg/${encodedCode}`,
+            `https://plantuml.com/plantuml/svg/${encodedCode}`
+        ];
+        
+        let svgContent = null;
+        let lastError = null;
+        
+        // 尝试每个服务器，带超时
+        for (const serverUrl of plantUmlServers) {
+            try {
+                console.log('尝试使用服务器:', serverUrl);
+                
+                // 使用AbortController设置请求超时
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+                
+                const response = await fetch(serverUrl, {
+                    signal: controller.signal,
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'image/svg+xml'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                console.log('服务器响应状态:', response.status);
+                
+                if (response.ok) {
+                    svgContent = await response.text();
+                    console.log('PlantUML SVG设置成功，服务器:', serverUrl, '长度:', svgContent.length);
+                    
+                    // 检查返回的内容是否是SVG格式（考虑可能包含XML声明的情况）
+                    const trimmedContent = svgContent.trim();
+                    if (!trimmedContent.startsWith('<svg') && !trimmedContent.includes('<svg')) {
+                        console.error('服务器返回的不是SVG内容:', svgContent.substring(0, 500));
+                        throw new Error('服务器返回了无效内容');
+                    }
+                    
+                    break;
+                } else {
+                    console.error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.warn('服务器连接失败:', serverUrl, error.message);
+                lastError = error;
+                continue; // 继续尝试下一个服务器
+            }
+        }
+        
+        if (!svgContent) {
+            // 所有服务器都失败，返回错误
+            throw new Error(`无法连接到PlantUML服务器: ${lastError?.message || '网络连接失败'}`);
+        }
+        
+        res.set('Content-Type', 'image/svg+xml');
+        res.send(svgContent);
+    } catch (error) {
+        console.error('PlantUML处理错误:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// AI生成场景图的PlantUML代码（只生成活动图）
+        async function generateScenarioDiagramWithAI(scenarioContent) {
+            const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+            const apiUrl = 'https://api.deepseek.com/chat/completions';
+            const apiKey = 'sk-852776dbae374cd0897001aa991243c6';
+
+            // 系统提示词，要求AI只生成活动图
+            const systemPrompt = `你是一个专业的软件架构师，擅长根据场景描述生成活动图(Flow Chart)的PlantUML代码。
+        请根据用户提供的场景描述，生成标准的PlantUML活动图代码。
+
+        要求：
+        1. 只生成活动图(Flow Chart)的PlantUML代码
+        2. 使用标准的PlantUML活动图语法，语法必须完全正确
+        3. 确保所有括号和引号正确配对
+        4. 每个图表都要使用@startuml和@enduml标签
+        5. 根据场景内容合理定义活动、分支和流程
+        6. 避免使用复杂的嵌套结构，保持语法简单清晰
+        7. 确保所有的箭头、分隔符、关键字拼写正确
+        8. 使用标准的活动图元素：start, stop, :活动描述;, if/then/else/endif, while/endwhile, repeat/endrepeat等
+
+        正确示例：
+        活动图示例：
+        \`\`\`plantuml
+        @startuml
+        start
+        :用户登录;
+        if (验证成功?) then
+          :显示主界面;
+        else
+          :显示错误信息;
+        endif
+        stop
+        @enduml
+        \`\`\``;
+
+            const userPrompt = `根据以下场景描述生成PlantUML活动图代码：
+
+        场景描述：${scenarioContent}
+
+        请严格按照上述系统提示词的要求，生成语法完全正确的PlantUML活动图代码：`;
+
+            const requestBody = {
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                stream: false,
+                max_tokens: 2048, // 适当token数以生成高质量图表
+                max_context_length: 131072, // 128K tokens
+                temperature: 0.1
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`DeepSeek API请求失败: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            let plantUmlCode = data.choices[0]?.message?.content || '';
+            
+            // 清理代码，移除markdown代码块标记
+            plantUmlCode = plantUmlCode.replace(/```(?:plantuml)?/g, '').trim();
+            
+            // 确保PlantUML代码包含必要的标签
+            if (!plantUmlCode.includes('@startuml')) {
+                plantUmlCode = '@startuml\n' + plantUmlCode;
+            }
+            if (!plantUmlCode.includes('@enduml')) {
+                plantUmlCode += '\n@enduml';
+            }
+            
+            return plantUmlCode;
+        }
+
+// 提取特定类型的PlantUML代码
+function extractPlantUmlCode(fullContent, type) {
+    let regex;
+    
+    // 根据图表类型创建不同的正则表达式
+    switch(type) {
+        case 'activity':
+            // 查找活动图相关内容
+            regex = /活动图[\s\S]*?```(?:plantuml)?\s*@startuml([\s\S]*?)@enduml\s*```|活动图[\s\S]*?(@startuml[\s\S]*?@enduml)|```(?:plantuml)?\s*@startuml([\s\S]*?activity[\s\S]*?)@enduml\s*```|@startuml([\s\S]*?activity[\s\S]*?)@enduml/gi;
+            break;
+        case 'sequence':
+            // 查找序列图相关内容
+            regex = /序列图[\s\S]*?```(?:plantuml)?\s*@startuml([\s\S]*?)@enduml\s*```|序列图[\s\S]*?(@startuml[\s\S]*?@enduml)|```(?:plantuml)?\s*@startuml([\s\S]*?sequence[\s\S]*?->[\s\S]*?)@enduml\s*```|@startuml([\s\S]*?sequence[\s\S]*?->[\s\S]*?)@enduml/gi;
+            break;
+        case 'state':
+            // 查找状态图相关内容
+            regex = /状态图[\s\S]*?```(?:plantuml)?\s*@startuml([\s\S]*?)@enduml\s*```|状态图[\s\S]*?(@startuml[\s\S]*?@enduml)|```(?:plantuml)?\s*@startuml([\s\S]*?state[\s\S]*?)@enduml\s*```|@startuml([\s\S]*?state[\s\S]*?)@enduml/gi;
+            break;
+        default:
+            regex = /```(?:plantuml)?\s*@startuml([\s\S]*?)@enduml\s*```|(@startuml[\s\S]*?@enduml)/gi;
+    }
+    
+    let match = regex.exec(fullContent);
+    let extractedCode = '';
+    
+    if (match) {
+        // 提取匹配的代码部分
+        extractedCode = (match[1] || match[2] || match[3] || match[4] || '').trim();
+    } else {
+        // 如果没找到特定类型的代码，尝试提取任何PlantUML代码
+        const fallbackRegex = /```(?:plantuml)?\s*@startuml([\s\S]*?)@enduml\s*```|(@startuml[\s\S]*?@enduml)/gi;
+        match = fallbackRegex.exec(fullContent);
+        if (match) {
+            extractedCode = (match[1] || match[2] || '').trim();
+        }
+    }
+    
+    if (extractedCode) {
+        // 清理代码，移除可能引起问题的字符
+        let cleanedCode = extractedCode
+            .replace(/\r/g, '')  // 移除回车符
+            .replace(/\n\s*\n/g, '\n')  // 移除多余的空行
+            .trim();
+        
+        // 确保PlantUML代码包含必要的标签
+        let finalCode = cleanedCode;
+        if (!finalCode.includes('@startuml')) {
+            finalCode = '@startuml\n' + finalCode;
+        }
+        if (!finalCode.includes('@enduml')) {
+            finalCode += '\n@enduml';
+        }
+        
+        return finalCode;
+    }
+    
+    // 如果无法提取特定类型的代码，返回一个默认的模板
+    return getDefaultTemplate(type);
+}
+
+// 获取默认的PlantUML模板
+function getDefaultTemplate(type) {
+    switch(type) {
+        case 'activity':
+            return `@startuml\n:根据场景描述生成活动图;\n:步骤1;\n:步骤2;\n:步骤3;\nstop\n@enduml`;
+        case 'sequence':
+            return `@startuml\nactor 用户\nparticipant "系统"\n用户 -> "系统": 请求\n"系统" -> 用户: 响应\n@enduml`;
+        case 'state':
+            return `@startuml\n[*] --> 初始状态\n初始状态 --> 最终状态\n最终状态 --> [*]\n@enduml`;
+        default:
+            return `@startuml\n:默认流程;\nstop\n@enduml`;
+    }
+}
 
 module.exports = router;

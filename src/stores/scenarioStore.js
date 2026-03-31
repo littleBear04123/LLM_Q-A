@@ -58,7 +58,7 @@ export const useScenarioStore = defineStore('scenario', {
       this.generatedContent = '';
     },
 
-    initializeFromStorage() {
+    async initializeFromStorage() {
       // 构建特定于项目和用例的存储键
       const projectId = this.currentScenario?.projectId;
       const useCaseId = this.currentScenario?.useCaseId;
@@ -67,18 +67,42 @@ export const useScenarioStore = defineStore('scenario', {
         const storageKey = `scenario_conversation_${projectId}_${useCaseId}`;
         const statusKey = `scenario_status_${projectId}_${useCaseId}`;
         
-        // 从localStorage加载对话历史
-        const savedHistory = localStorage.getItem(storageKey);
-        if (savedHistory) {
-          try {
-            this.conversationHistory = JSON.parse(savedHistory);
-          } catch (error) {
-            console.error('加载对话历史失败:', error);
-            this.conversationHistory = [];
+        // 首先尝试从后端API获取最新的消息历史
+        try {
+          const userStore = useUserStore();
+          const response = await fetch(`/api/scenarios/${useCaseId}/messages`, {
+            headers: {
+              'X-Session-Token': userStore.sessionToken
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.messages) {
+              // 使用从后端获取的消息历史
+              this.conversationHistory = data.messages;
+            }
+          } else {
+            console.warn('获取后端消息历史失败，将使用本地存储的数据');
+          }
+        } catch (error) {
+          console.error('获取后端消息历史时出错:', error);
+        }
+        
+        // 如果后端没有数据或获取失败，尝试从localStorage加载对话历史
+        if (this.conversationHistory.length === 0) {
+          const savedHistory = localStorage.getItem(storageKey);
+          if (savedHistory) {
+            try {
+              this.conversationHistory = JSON.parse(savedHistory);
+            } catch (error) {
+              console.error('加载对话历史失败:', error);
+              this.conversationHistory = [];
+            }
           }
         }
         
-        // 从localStorage加载状态表
+        // 从localStorage加载状态表（状态表通常不会通过API获取，因为它是实时更新的）
         const savedStatusTable = localStorage.getItem(statusKey);
         if (savedStatusTable) {
           try {

@@ -20,6 +20,7 @@
     "express": "^4.18.2",
     "mermaid": "^8.14.0",
     "node-fetch": "^3.3.2",
+    "pako": "^2.1.0",
     "pinia": "^2.1.0",
     "plantuml-encoder": "^1.4.0",
     "uuid": "^9.0.0",

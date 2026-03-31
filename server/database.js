@@ -67,20 +67,14 @@ function initializeTables() {
     db.exec(`
         CREATE TABLE IF NOT EXISTS scenarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            project_id INTEGER NOT NULL,
             use_case_id INTEGER NOT NULL,
-            session_id INTEGER,
             title TEXT,
             initial_input TEXT,
             generated_scenario TEXT,
             status_table TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-            FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
-            FOREIGN KEY (use_case_id) REFERENCES use_cases (id) ON DELETE CASCADE,
-            FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE SET NULL
+            FOREIGN KEY (use_case_id) REFERENCES use_cases (id) ON DELETE CASCADE
         )
     `);
 
@@ -88,11 +82,11 @@ function initializeTables() {
     db.exec(`
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-           session_id INTEGER NOT NULL,
+            scenario_id INTEGER NOT NULL,
             role TEXT CHECK(role IN ('user', 'assistant')) NOT NULL,
             content TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
+            FOREIGN KEY (scenario_id) REFERENCES scenarios (id) ON DELETE CASCADE
         )
     `);
 
@@ -283,13 +277,13 @@ getUnfinishedScenarios: (userId) => {
 },
 
     // 场景相关操作
-    createScenario: (userId, projectId, useCaseId, sessionId, title, initialInput) => {
+    createScenario: (useCaseId, title, initialInput) => {
         try {
             const stmt = db.prepare(`
-                INSERT INTO scenarios (user_id, project_id, use_case_id, session_id, title, initial_input) 
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO scenarios (use_case_id, title, initial_input) 
+                VALUES (?, ?, ?)
             `);
-            const result = stmt.run(userId, projectId, useCaseId, sessionId, title, initialInput);
+            const result = stmt.run(useCaseId, title, initialInput);
             return result.lastInsertRowid;
         } catch (error) {
             console.error('Error in createScenario:', error);
@@ -325,26 +319,26 @@ getUnfinishedScenarios: (userId) => {
         }
     },
 
-    getLatestScenarioBySession: (sessionId) => {
+    getScenarioByUseCase: (useCaseId) => {
         try {
             const stmt = db.prepare(`
                 SELECT * FROM scenarios 
-                WHERE session_id = ? 
-                ORDER BY created_at DESC
+                WHERE use_case_id = ? 
+                ORDER BY updated_at DESC
                 LIMIT 1
             `);
-            return stmt.get(sessionId);
+            return stmt.get(useCaseId);
         } catch (error) {
-            console.error('Error in getLatestScenarioBySession:', error);
+            console.error('Error in getScenarioByUseCase:', error);
             throw error;
         }
     },
 
     // 消息相关操作
-    saveMessage: (sessionId, role, content) => {
+    saveMessage: (scenarioId, role, content) => {
         try {
-            const stmt = db.prepare('INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)');
-            const result = stmt.run(sessionId, role, content);
+            const stmt = db.prepare('INSERT INTO messages (scenario_id, role, content) VALUES (?, ?, ?)');
+            const result = stmt.run(scenarioId, role, content);
             return result.lastInsertRowid;
         } catch (error) {
             console.error('Error in saveMessage:', error);
@@ -352,16 +346,16 @@ getUnfinishedScenarios: (userId) => {
         }
     },
 
-    getMessageHistory: (sessionId, limit = 10) => {
+    getMessageHistory: (scenarioId, limit = 10) => {
         try {
             const stmt = db.prepare(`
                 SELECT role, content, created_at 
                 FROM messages 
-                WHERE session_id = ? 
+                WHERE scenario_id = ? 
                 ORDER BY created_at ASC 
                 LIMIT ?
             `);
-            return stmt.all(sessionId, limit);
+            return stmt.all(scenarioId, limit);
         } catch (error) {
             console.error('Error in getMessageHistory:', error);
             throw error;
@@ -379,32 +373,37 @@ getUnfinishedScenarios: (userId) => {
         }
     },
 
-    // 更新会话状态表（修复版本）
-    updateSessionStatusTable: (sessionId, statusTable) => {
+    // 更新会话活动时间
+    updateSessionActivity: (sessionId) => {
         try {
-            // 直接在sessions表中添加status_table字段
-            // 首先检查sessions表是否有status_table字段
-            const checkStmt = db.prepare(`PRAGMA table_info(sessions)`);
-            const columns = checkStmt.all();
-            const hasStatusTable = columns.some(col => col.name === 'status_table');
-            
-            if (!hasStatusTable) {
-                // 添加status_table字段
-                db.exec(`ALTER TABLE sessions ADD COLUMN status_table TEXT`);
-                console.log('✅ 已为sessions表添加status_table字段');
-            }
-            
-            // 更新会话的状态表
-            const stmt = db.prepare(`
-                UPDATE sessions 
-                SET status_table = ?, last_active = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            `);
-            stmt.run(statusTable, sessionId);
-            console.log('✅ 状态表已保存到会话:', sessionId);
+            const stmt = db.prepare('UPDATE sessions SET last_active = CURRENT_TIMESTAMP WHERE id = ?');
+            stmt.run(sessionId);
         } catch (error) {
-            console.error('Error in updateSessionStatusTable:', error);
+            console.error('Error in updateSessionActivity:', error);
             throw error;
+        }
+    },
+
+    // 更新场景的状态表
+    updateScenarioStatusTable: (scenarioId, statusTable) => {
+        try {
+            const stmt = db.prepare('UPDATE scenarios SET status_table = ? WHERE id = ?');
+            stmt.run(JSON.stringify(statusTable), scenarioId);
+        } catch (error) {
+            console.error('Error in updateScenarioStatusTable:', error);
+            throw error;
+        }
+    },
+
+    // 获取场景的状态表
+    getScenarioStatusTable: (scenarioId) => {
+        try {
+            const stmt = db.prepare('SELECT status_table FROM scenarios WHERE id = ?');
+            const result = stmt.get(scenarioId);
+            return result && result.status_table ? JSON.parse(result.status_table) : null;
+        } catch (error) {
+            console.error('Error in getScenarioStatusTable:', error);
+            return null;
         }
     }
 };

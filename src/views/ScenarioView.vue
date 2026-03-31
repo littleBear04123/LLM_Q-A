@@ -169,16 +169,45 @@
           保存场景
         </button>
       </div>
+      
+      <!-- 场景图区域 -->
+      <div class="scenario-diagram-area" v-if="scenarioStore.generatedContent">
+        <h3>场景图</h3>
+        <div class="diagram-controls">
+          <button 
+            @click="generateScenarioDiagram" 
+            class="diagram-btn"
+            :disabled="isGeneratingDiagram"
+          >
+            {{ isGeneratingDiagram ? '生成中...' : '生成场景图' }}
+          </button>
+          
+          <!-- 图表类型选择 -->
+          <div class="diagram-type-selector" v-if="hasAvailableDiagrams">
+            <button 
+              v-for="(type, key) in diagramTypes" 
+              :key="key"
+              @click="switchDiagramType(key)"
+              :class="['type-btn', { active: selectedDiagramType === key, hidden: !(type.svg && type.svg.length > 20) }]"
+              v-show="type.svg && type.svg.length > 20"
+            >
+              {{ type.label }}
+            </button>
+          </div>
+        </div>
+        <div class="diagram-display" ref="diagramRef" v-html="scenarioDiagramSvg"></div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/userStore'
 import { useProjectStore } from '../stores/projectStore'
 import { useScenarioStore } from '../stores/scenarioStore'
+import plantumlEncoder from 'plantuml-encoder'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,8 +215,24 @@ const projectStore = useProjectStore()
 const scenarioStore = useScenarioStore()
 
 const chatContainer = ref(null)
+const diagramRef = ref(null) // 添加用于场景图的ref
 const projectId = computed(() => route.params.projectId)
 const useCaseId = computed(() => route.params.useCaseId)
+
+// 场景图相关状态
+const isGeneratingDiagram = ref(false)
+const scenarioDiagramSvg = ref('')
+const selectedDiagramType = ref('activity') // 默认显示活动图
+const diagramTypes = {
+  activity: { label: '活动图', svg: '', code: '' },
+  sequence: { label: '序列图', svg: '', code: '' },
+  state: { label: '状态图', svg: '', code: '' }
+}
+
+// 检查是否有可用的图表
+const hasAvailableDiagrams = computed(() => {
+  return Object.values(diagramTypes).some(type => type.svg && type.svg.length > 20);
+})
 
 const useCaseName = ref('')
 const actorName = ref('')
@@ -370,8 +415,8 @@ onMounted(async () => {
   // 先加载用例信息以设置currentScenario
   await loadUseCaseInfo()
   
-  // 再从本地存储加载之前保存的对话历史和状态
-  scenarioStore.initializeFromStorage()
+  // 再从本地存储和后端加载之前保存的对话历史和状态
+  await scenarioStore.initializeFromStorage()
 })
 
 // 发送用户回答
@@ -511,7 +556,7 @@ const generateScenarioWithOptions = async () => {
 
 // 根据对话生成场景（使用状态表信息）
 const generateScenarioFromDialog = async () => {
-  console.log('根据对话生成场景')
+
   
   try {
     // 获取当前项目名称
@@ -639,6 +684,176 @@ const saveScenario = async () => {
     console.error('保存场景失败:', error);
     alert('保存场景失败: ' + error.message);
   }
+};
+
+// 生成场景图
+const generateScenarioDiagram = async () => {
+  if (!scenarioStore.generatedContent) {
+    alert('请先生成场景内容');
+    return;
+  }
+  
+  isGeneratingDiagram.value = true;
+  
+  try {
+  
+    
+    const userStore = useUserStore(); // 获取用户存储实例
+    
+    const response = await fetch(`/api/scenarios/${route.params.useCaseId}/generate-diagram`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': userStore.sessionToken
+      },
+      body: JSON.stringify({
+        scenarioContent: scenarioStore.generatedContent,
+        projectId: parseInt(route.params.projectId),
+        useCaseId: parseInt(route.params.useCaseId)
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: '生成场景图失败' }));
+      throw new Error(errorData.error || '生成场景图失败');
+    }
+    
+    const data = await response.json();
+    
+    if (data.diagramCode) {
+      console.log('接收到场景图代码');
+      
+      // 清除之前的图表
+      diagramTypes.activity.code = data.diagramCode;
+      diagramTypes.activity.svg = await renderPlantUmlToSvg(data.diagramCode);
+      
+      // 检查图表是否成功生成
+      if (diagramTypes.activity.svg && (diagramTypes.activity.svg.startsWith('<svg') || diagramTypes.activity.svg.includes('<svg'))) {
+        scenarioDiagramSvg.value = diagramTypes.activity.svg;
+        selectedDiagramType.value = 'activity'; // 显示活动图
+        console.log('活动图生成成功');
+      } else {
+        throw new Error('图表渲染失败，请检查PlantUML代码是否正确');
+      }
+    } else {
+      throw new Error('服务器未返回有效的图表代码');
+    }
+    
+    console.log('场景图生成成功');
+  } catch (error) {
+    console.error('生成场景图失败:', error);
+    alert('生成场景图失败: ' + error.message);
+  } finally {
+    isGeneratingDiagram.value = false;
+  }
+};
+
+// 渲染PlantUML图表
+const renderPlantUml = async (code) => {
+  try {
+    if (!code || code.trim() === '') {
+      scenarioDiagramSvg.value = '<div class="empty-plantuml">等待PlantUML代码...</div>';
+      return;
+    }
+    
+    // 处理PlantUML代码
+    const processedCode = code.replace(/```(?:plantuml)?/g, '').trim();
+    
+    // 通过后端代理获取SVG内容（绕过CORS限制）
+    const userStore = useUserStore();
+    
+    const response = await fetch('/api/plantuml/render', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': userStore.sessionToken
+      },
+      body: JSON.stringify({ plantumlCode: processedCode })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: '渲染失败' }));
+      throw new Error(errorData.error || '渲染失败');
+    }
+    
+    const svgContent = await response.text();
+    scenarioDiagramSvg.value = svgContent;
+    
+    // 添加点击事件和缩放功能
+    await nextTick();
+    addClickEvents();
+  } catch (error) {
+    console.error('PlantUML渲染错误:', error);
+    scenarioDiagramSvg.value = `
+      <div class="error">
+        <h4>图表渲染失败</h4>
+        <p>原因: ${error.message}</p>
+        <p>请检查网络连接或稍后重试。</p>
+      </div>
+    `;
+  }
+};
+
+// 将PlantUML代码渲染为SVG字符串
+const renderPlantUmlToSvg = async (code) => {
+  try {
+    if (!code || code.trim() === '') {
+      return '<div class="empty-plantuml">等待PlantUML代码...</div>';
+    }
+    
+    // 处理PlantUML代码
+    const processedCode = code.replace(/```(?:plantuml)?/g, '').trim();
+    
+    // 通过后端获取处理过的PlantUML代码
+    const userStore = useUserStore();
+    
+    const response = await fetch('/api/plantuml/render', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': userStore.sessionToken
+      },
+      body: JSON.stringify({ plantumlCode: processedCode })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: '渲染失败' }));
+      throw new Error(errorData.error || '渲染失败');
+    }
+    
+    const svgContent = await response.text();
+    return svgContent;
+  } catch (error) {
+    console.error('PlantUML渲染错误:', error);
+    return `
+      <div class="error">
+        <h4>图表渲染失败</h4>
+        <p>原因: ${error.message}</p>
+        <p>请检查网络连接或稍后重试。</p>
+      </div>
+    `;
+  }
+};
+
+// 切换图表类型
+const switchDiagramType = (type) => {
+  selectedDiagramType.value = type;
+  scenarioDiagramSvg.value = diagramTypes[type].svg;
+};
+
+// 点击事件处理
+const addClickEvents = () => {
+  if (!diagramRef.value) return;
+  
+  const svgElement = diagramRef.value.querySelector('svg');
+  if (!svgElement) {
+    console.warn('未找到SVG元素');
+    return;
+  }
+  
+  // 添加样式优化SVG质量
+  svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svgElement.style.shapeRendering = 'geometricPrecision';
 };
 </script>
 
@@ -1167,6 +1382,123 @@ body {
 
 .success-btn:not(:disabled):active {
   transform: translateY(0);
+}
+
+.diagram-btn {
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 140px;
+  box-shadow: 0 1px 3px rgba(139, 92, 246, 0.2);
+}
+
+.diagram-btn:hover:not(:disabled) {
+  background-color: #7c3aed;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3);
+}
+
+.diagram-btn:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+  transform: none;
+  opacity: 0.6;
+}
+
+.diagram-btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.scenario-diagram-area {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease;
+}
+
+.scenario-diagram-area:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+}
+
+.scenario-diagram-area h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+
+.diagram-controls {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.diagram-display {
+  min-height: 400px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+
+.diagram-display :deep(svg) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+  image-rendering: optimizeQuality;
+}
+
+.diagram-type-selector {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.type-btn {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  color: #4b5563;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.type-btn:hover {
+  background-color: #e5e7eb;
+}
+
+.type-btn.active {
+  background-color: #61BFAD;
+  color: white;
+  border-color: #61BFAD;
+}
+
+.type-btn.active:hover {
+  background-color: #4da89a;
+}
+
+.hidden {
+  display: none;
 }
 
 .warning-btn {
