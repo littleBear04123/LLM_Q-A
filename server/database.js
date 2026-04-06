@@ -67,11 +67,12 @@ function initializeTables() {
     db.exec(`
         CREATE TABLE IF NOT EXISTS scenarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            use_case_id INTEGER NOT NULL,
+            use_case_id INTEGER NOT NULL UNIQUE,  -- 修改为UNIQUE，确保一个用例只对应一个场景
             title TEXT,
             initial_input TEXT,
             generated_scenario TEXT,
             status_table TEXT,
+            scenario_plantuml_code TEXT,  -- 新增：存储场景图的PlantUML代码
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (use_case_id) REFERENCES use_cases (id) ON DELETE CASCADE
@@ -279,12 +280,30 @@ getUnfinishedScenarios: (userId) => {
     // 场景相关操作
     createScenario: (useCaseId, title, initialInput) => {
         try {
-            const stmt = db.prepare(`
-                INSERT INTO scenarios (use_case_id, title, initial_input) 
-                VALUES (?, ?, ?)
-            `);
-            const result = stmt.run(useCaseId, title, initialInput);
-            return result.lastInsertRowid;
+            // 检查是否已存在该用例的场景，如果存在则更新，否则插入新记录
+            const existingScenarioStmt = db.prepare('SELECT id FROM scenarios WHERE use_case_id = ?');
+            const existingScenario = existingScenarioStmt.get(useCaseId);
+            
+            if (existingScenario) {
+                // 如果场景已存在，则更新它
+                const updateStmt = db.prepare(`
+                    UPDATE scenarios 
+                    SET title = COALESCE(?, title), 
+                        initial_input = COALESCE(?, initial_input),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE use_case_id = ?
+                `);
+                updateStmt.run(title, initialInput, useCaseId);
+                return existingScenario.id;
+            } else {
+                // 如果场景不存在，则创建新场景
+                const insertStmt = db.prepare(`
+                    INSERT INTO scenarios (use_case_id, title, initial_input) 
+                    VALUES (?, ?, ?)
+                `);
+                const result = insertStmt.run(useCaseId, title, initialInput);
+                return result.lastInsertRowid;
+            }
         } catch (error) {
             console.error('Error in createScenario:', error);
             throw error;
@@ -296,7 +315,6 @@ getUnfinishedScenarios: (userId) => {
             const stmt = db.prepare(`
                 SELECT * FROM scenarios 
                 WHERE use_case_id = ? 
-                ORDER BY updated_at DESC
             `);
             return stmt.all(useCaseId);
         } catch (error) {
@@ -305,14 +323,26 @@ getUnfinishedScenarios: (userId) => {
         }
     },
 
-    updateScenarioContent: (scenarioId, generatedScenario, statusTable) => {
+    updateScenarioContent: (scenarioId, generatedScenario, statusTable, scenarioPlantUmlCode = null) => {
         try {
-            const stmt = db.prepare(`
-                UPDATE scenarios 
-                SET generated_scenario = ?, status_table = ?, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            `);
-            stmt.run(generatedScenario, statusTable, scenarioId);
+            let stmt;
+            if (scenarioPlantUmlCode !== null) {
+                // 如果提供了场景图代码，则也更新它
+                stmt = db.prepare(`
+                    UPDATE scenarios 
+                    SET generated_scenario = ?, status_table = ?, scenario_plantuml_code = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                `);
+                stmt.run(generatedScenario, statusTable, scenarioPlantUmlCode, scenarioId);
+            } else {
+                // 否则只更新场景内容和状态表
+                stmt = db.prepare(`
+                    UPDATE scenarios 
+                    SET generated_scenario = ?, status_table = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                `);
+                stmt.run(generatedScenario, statusTable, scenarioId);
+            }
         } catch (error) {
             console.error('Error in updateScenarioContent:', error);
             throw error;
@@ -324,8 +354,6 @@ getUnfinishedScenarios: (userId) => {
             const stmt = db.prepare(`
                 SELECT * FROM scenarios 
                 WHERE use_case_id = ? 
-                ORDER BY updated_at DESC
-                LIMIT 1
             `);
             return stmt.get(useCaseId);
         } catch (error) {

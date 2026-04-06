@@ -112,7 +112,7 @@
         <div class="scenario-preview">
           <h3>场景预览</h3>
           <div class="preview-content">
-            <div v-if="scenarioStore.generatedContent">
+            <div>
               <h4>生成的场景:</h4>
               <textarea 
                 v-model="scenarioStore.generatedContent" 
@@ -121,10 +121,10 @@
                 placeholder="在这里编辑生成的场景..."
               ></textarea>
             </div>
-            <div v-else-if="scenarioStore.isGenerating" class="generating-state">
+            <div v-if="!scenarioStore.generatedContent && scenarioStore.isGenerating" class="generating-state">
               <p>正在生成场景，请稍候...</p>
             </div>
-            <div v-else>
+            <div v-else-if="!scenarioStore.generatedContent && !scenarioStore.isGenerating">
               <p>场景将在您完成引导式提问后生成...</p>
             </div>
           </div>
@@ -155,7 +155,6 @@
         <button 
           @click="regenerateScenario" 
           class="secondary-btn" 
-          v-if="scenarioStore.generatedContent"
           :disabled="scenarioStore.isGenerating"
         >
           重新生成场景
@@ -163,7 +162,6 @@
         <button 
           @click="saveScenario" 
           class="success-btn" 
-          v-if="scenarioStore.generatedContent"
           :disabled="scenarioStore.isGenerating"
         >
           保存场景
@@ -171,7 +169,7 @@
       </div>
       
       <!-- 场景图区域 -->
-      <div class="scenario-diagram-area" v-if="scenarioStore.generatedContent">
+      <div class="scenario-diagram-area">
         <h3>场景图</h3>
         <div class="diagram-controls">
           <button 
@@ -410,6 +408,68 @@ watch([() => route.params.projectId, () => route.params.useCaseId], async ([newP
   }
 }, { immediate: true });
 
+// 加载场景图
+const loadScenarioDiagram = async () => {
+  try {
+    const userStore = useUserStore();
+    const response = await fetch(`/api/scenarios/${route.params.useCaseId}/diagram`, {
+      headers: {
+        'X-Session-Token': userStore.sessionToken
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.success && data.diagramCode) {
+        console.log('加载已存储的场景图代码');
+        
+        // 存储代码并渲染图表
+        diagramTypes.activity.code = data.diagramCode;
+        diagramTypes.activity.svg = await renderPlantUmlToSvg(data.diagramCode);
+        
+        // 检查图表是否成功生成
+        if (diagramTypes.activity.svg && (diagramTypes.activity.svg.startsWith('<svg') || diagramTypes.activity.svg.includes('<svg'))) {
+          scenarioDiagramSvg.value = diagramTypes.activity.svg;
+          selectedDiagramType.value = 'activity'; // 显示活动图
+          console.log('已存储的活动图加载成功');
+        } else {
+          console.error('已存储的图表渲染失败');
+        }
+      }
+    } else {
+      console.warn('获取已存储的场景图代码失败');
+    }
+  } catch (error) {
+    console.error('加载场景图失败:', error);
+  }
+};
+
+// 加载场景内容
+const loadScenarioContent = async () => {
+  try {
+    const userStore = useUserStore();
+    // 获取与用例关联的场景
+    const scenarioResponse = await fetch(`/api/scenarios/${route.params.useCaseId}/get-scenario`, {
+      headers: {
+        'X-Session-Token': userStore.sessionToken
+      }
+    });
+    
+    if (scenarioResponse.ok) {
+      const scenarioData = await scenarioResponse.json();
+      if (scenarioData.success) {
+        scenarioStore.generatedContent = scenarioData.scenario || '';
+        console.log('已加载场景内容');
+      }
+    } else {
+      console.warn('获取场景内容失败');
+    }
+  } catch (error) {
+    console.error('加载场景内容失败:', error);
+  }
+};
+
 // 初始化时获取用例信息并加载保存的对话
 onMounted(async () => {
   // 先加载用例信息以设置currentScenario
@@ -417,6 +477,12 @@ onMounted(async () => {
   
   // 再从本地存储和后端加载之前保存的对话历史和状态
   await scenarioStore.initializeFromStorage()
+  
+  // 加载已存储的场景内容
+  await loadScenarioContent()
+  
+  // 加载已存储的场景图
+  await loadScenarioDiagram()
 })
 
 // 发送用户回答
@@ -696,8 +762,6 @@ const generateScenarioDiagram = async () => {
   isGeneratingDiagram.value = true;
   
   try {
-  
-    
     const userStore = useUserStore(); // 获取用户存储实例
     
     const response = await fetch(`/api/scenarios/${route.params.useCaseId}/generate-diagram`, {

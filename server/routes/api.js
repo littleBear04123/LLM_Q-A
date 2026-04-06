@@ -884,16 +884,32 @@ router.post('/scenarios/:useCaseId/generate-diagram', async (req, res) => {
         console.log('🎨 开始生成场景图，用例ID:', useCaseId, '项目ID:', projectId);
 
         // 从数据库获取场景内容
-        const scenarios = userModel.getScenariosByUseCase(useCaseId);
+        const scenario = userModel.getScenarioByUseCase(useCaseId);
         let contentToUse = scenarioContent;
         
-        if (scenarios && scenarios.length > 0) {
+        if (scenario) {
             // 使用数据库中的最新场景内容
-            contentToUse = scenarios[0].generated_scenario || scenarioContent;
+            contentToUse = scenario.generated_scenario || scenarioContent;
         }
 
         // 调用AI生成PlantUML代码
         const plantUmlCode = await generateScenarioDiagramWithAI(contentToUse);
+
+        // 更新场景记录，保存PlantUML代码
+        if (scenario) {
+            // 如果场景已存在，更新场景内容和PlantUML代码
+            const statusTable = scenario.status_table ? JSON.parse(scenario.status_table) : {};
+            await userModel.updateScenarioContent(scenario.id, scenario.generated_scenario || scenarioContent, JSON.stringify(statusTable), plantUmlCode);
+        } else {
+            // 如果场景不存在，创建新场景并保存PlantUML代码
+            const scenarioId = userModel.createScenario(useCaseId, `Scenario for Use Case ${useCaseId}`, contentToUse);
+            // 获取新创建的场景并更新PlantUML代码
+            const newScenario = userModel.getScenarioByUseCase(useCaseId);
+            if (newScenario) {
+                const statusTable = newScenario.status_table ? JSON.parse(newScenario.status_table) : {};
+                await userModel.updateScenarioContent(newScenario.id, contentToUse, JSON.stringify(statusTable), plantUmlCode);
+            }
+        }
 
         res.json({
             success: true,
@@ -934,6 +950,60 @@ router.get('/scenarios/:useCaseId/messages', async (req, res) => {
     } catch (error) {
         console.error('获取场景消息历史失败:', error);
         res.status(500).json({ error: '获取消息历史失败: ' + error.message });
+    }
+});
+
+// 获取场景内容API
+router.get('/scenarios/:useCaseId/get-scenario', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const useCaseId = req.params.useCaseId;
+        
+        // 获取与用例关联的场景
+        const scenario = userModel.getScenarioByUseCase(useCaseId);
+        if (!scenario) {
+            return res.status(404).json({ error: '未找到相关场景' });
+        }
+
+        res.json({
+            success: true,
+            scenario: scenario.generated_scenario || '',
+            scenarioId: scenario.id
+        });
+
+    } catch (error) {
+        console.error('获取场景内容失败:', error);
+        res.status(500).json({ error: '获取场景内容失败: ' + error.message });
+    }
+});
+
+// 获取场景图代码API
+router.get('/scenarios/:useCaseId/diagram', async (req, res) => {
+    if (!req.session || !req.session.user_id) {
+        return res.status(401).json({ error: '请先登录' });
+    }
+
+    try {
+        const useCaseId = req.params.useCaseId;
+        
+        // 获取与用例关联的场景
+        const scenario = userModel.getScenarioByUseCase(useCaseId);
+        if (!scenario) {
+            return res.status(404).json({ error: '未找到相关场景' });
+        }
+
+        res.json({
+            success: true,
+            diagramCode: scenario.scenario_plantuml_code || null,
+            scenarioId: scenario.id
+        });
+
+    } catch (error) {
+        console.error('获取场景图代码失败:', error);
+        res.status(500).json({ error: '获取场景图代码失败: ' + error.message });
     }
 });
 
