@@ -1,8 +1,8 @@
 <template>
   <div class="chat-container">
     <div class="header">
-      <h1>DeepSeek AI对话助手</h1>
-      <p>基于官方DeepSeek API的智能对话系统 <span class="success-badge">已连接</span></p>
+      <h1>DeepSeekAI对话助手</h1>
+      <p>基于DeepSeek的智能对话系统 <span class="success-badge">已连接</span></p>
     </div>
     
     <div class="messages-wrapper">
@@ -31,7 +31,7 @@
               <span></span>
               <span></span>
             </span>
-            DeepSeek正在思考中...
+            智能助手正在思考中...
           </div>
         </div>
       </div>
@@ -181,7 +181,6 @@ export default {
 </script>
 
 <style scoped>
-/* 粒子背景效果 */
 .chat-container::before {
   content: "";
   position: fixed;

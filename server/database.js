@@ -433,6 +433,22 @@ getUnfinishedScenarios: (userId) => {
             console.error('Error in getScenarioStatusTable:', error);
             return null;
         }
+    },
+
+    // 删除用户及其所有相关数据
+    deleteUserAccount: (userId) => {
+        try {
+            // 由于数据库中外键约束设置了 ON DELETE CASCADE，
+            // 删除用户时会自动删除相关的项目、用例、场景和消息
+            const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+            const result = stmt.run(userId);
+            
+            console.log(`用户 ${userId} 及其所有相关数据已删除`);
+            return result.changes > 0; // 返回是否成功删除
+        } catch (error) {
+            console.error('Error in deleteUserAccount:', error);
+            throw error;
+        }
     }
 };
 

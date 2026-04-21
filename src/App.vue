@@ -9,6 +9,7 @@
         <div class="user-info">
           <span>欢迎，{{ userStore.currentUserName }}</span>
           <el-button @click="handleLogout" type="primary" link>退出登录</el-button>
+          <el-button @click="handleDeleteAccount" type="danger" link>注销账号</el-button>
         </div>
       </div>
     </el-header>
@@ -24,6 +25,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from './stores/userStore'
+import { ElMessageBox, ElMessage } from 'element-plus'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -72,6 +74,50 @@ const handleLogout = () => {
   console.log('用户点击退出登录')
   userStore.logout()
   router.replace('/login')
+}
+
+const handleDeleteAccount = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '注销账号后此账号所有数据将会被删除，是否注销？',
+      '确认注销',
+      {
+        confirmButtonText: '是',
+        cancelButtonText: '否',
+        type: 'warning',
+      }
+    );
+    
+    // 用户确认删除，发送请求到后端删除账户
+    try {
+      const response = await fetch('/api/users/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'X-Session-Token': userStore.sessionToken
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // 删除成功，显示成功消息
+        ElMessage.success(result.message || '账户已成功删除');
+        
+        // 清除本地状态并跳转到登录页
+        userStore.logout();
+        router.replace('/login');
+      } else {
+        const error = await response.json();
+        // 显示错误消息
+        ElMessage.error(error.error || '删除账户失败');
+      }
+    } catch (error) {
+      console.error('删除账户请求失败:', error);
+      ElMessage.error('网络错误，请稍后重试');
+    }
+  } catch (error) {
+    // 用户取消删除操作，不做任何事情
+    console.log('用户取消了删除操作');
+  }
 }
 </script>
 
