@@ -4,20 +4,35 @@
     
     <!-- 项目选择/创建 -->
     <div class="project-section">
-      <el-select 
-        v-model="selectedProject" 
-        placeholder="选择现有项目"
-        style="width: 100%; margin-bottom: 15px;"
-        @change="handleProjectChange"
-        :loading="loadingProjects"
-      >
-        <el-option
-          v-for="project in projects"
-          :key="project.id"
-          :label="project.project_name"
-          :value="project.id"
-        />
-      </el-select>
+      <div class="project-select-container">
+        <el-select 
+          v-model="selectedProject" 
+          placeholder="选择现有项目"
+          style="width: 100%; margin-bottom: 15px;"
+          @change="handleProjectChange"
+          :loading="loadingProjects"
+        >
+          <el-option
+            v-for="project in projects"
+            :key="project.id"
+            :label="project.project_name"
+            :value="project.id"
+          >
+            <div class="project-option">
+              <span class="project-name">{{ project.project_name }}</span>
+              <el-button 
+                type="danger" 
+                size="small"
+                circle
+                @click.prevent="confirmDeleteProject(project.id)"
+                style="margin-left: 10px; padding: 4px;"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </el-option>
+        </el-select>
+      </div>
       
       <el-button 
         type="primary" 
@@ -88,6 +103,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useProjectStore } from '../stores/projectStore'
 import { useUserStore } from '../stores/userStore'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 
 const props = defineProps({
   loading: Boolean
@@ -214,6 +231,68 @@ const handleGenerateWithCurrentProject = async () => {
     newProjectForm.value.requirementText = requirementText.value
   }
 }
+
+// 确认删除项目
+const confirmDeleteProject = async (projectId) => {
+  if (!projectId) {
+    ElMessage.warning('请选择要删除的项目');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '删除项目后，该项目下的所有用例、场景和对话记录都将被永久删除，是否继续？',
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+
+    // 执行删除操作
+    await deleteProject(projectId);
+  } catch (error) {
+    // 用户取消删除操作
+    console.log('用户取消了删除操作');
+  }
+}
+
+// 删除项目
+const deleteProject = async (projectId) => {
+  try {
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Session-Token': userStore.sessionToken
+      }
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      ElMessage.success(result.message || '项目删除成功');
+      
+      // 重新加载项目列表
+      await loadProjects();
+      
+      // 如果删除的是当前选中的项目，清除选择
+      if (selectedProject.value === projectId) {
+        selectedProject.value = '';
+        requirementText.value = '';
+        projectStore.clearCurrentState(); // 清空当前项目状态
+      }
+      
+      // 触发项目列表更新事件
+      emit('reload-projects');
+    } else {
+      const error = await response.json();
+      ElMessage.error(error.error || '删除项目失败');
+    }
+  } catch (error) {
+    console.error('删除项目请求失败:', error);
+    ElMessage.error('网络错误，请稍后重试');
+  }
+}
 </script>
 
 <style scoped>
@@ -245,5 +324,19 @@ h3 {
   color: #303133;
   border-bottom: 2px solid #409eff;
   padding-bottom: 10px;
+}
+
+.project-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.project-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

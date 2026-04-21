@@ -449,6 +449,30 @@ getUnfinishedScenarios: (userId) => {
             console.error('Error in deleteUserAccount:', error);
             throw error;
         }
+    },
+
+    // 删除项目及其所有相关数据
+    deleteProject: (projectId, userId) => {
+        try {
+            // 首先验证项目是否属于该用户
+            const checkStmt = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?');
+            const project = checkStmt.get(projectId, userId);
+            
+            if (!project) {
+                throw new Error('项目不存在或不属于当前用户');
+            }
+            
+            // 由于数据库中外键约束设置了 ON DELETE CASCADE，
+            // 删除项目时会自动删除相关的用例、场景和消息
+            const stmt = db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
+            const result = stmt.run(projectId, userId);
+            
+            console.log(`项目 ${projectId} 及其所有相关数据已删除`);
+            return result.changes > 0; // 返回是否成功删除
+        } catch (error) {
+            console.error('Error in deleteProject:', error);
+            throw error;
+        }
     }
 };
 

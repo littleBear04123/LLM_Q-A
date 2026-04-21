@@ -650,4 +650,31 @@ function generateUseCaseId(name) {
     return name.replace(/\s+/g, '-').toLowerCase() + '-' + Date.now();
 }
 
+// 删除项目及其所有相关数据
+router.delete('/:id', async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        
+        // 验证项目ID
+        if (!projectId || isNaN(parseInt(projectId))) {
+            return res.status(400).json({ error: '无效的项目ID' });
+        }
+
+        // 删除项目及其相关数据
+        const success = userModel.deleteProject(parseInt(projectId), req.session.user_id);
+        
+        if (success) {
+            res.json({ 
+                success: true, 
+                message: '项目及所有相关数据已成功删除' 
+            });
+        } else {
+            res.status(404).json({ error: '项目不存在或删除失败' });
+        }
+    } catch (error) {
+        console.error('Delete project error:', error);
+        res.status(500).json({ error: '删除项目失败: ' + error.message });
+    }
+});
+
 module.exports = router;
