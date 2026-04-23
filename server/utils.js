@@ -1,5 +1,8 @@
-function createInitialStatusTable() {
-    return {
+//创建初始状态表
+function createInitialStatusTable(sceneDescription = "") {
+    // 创建初始状态表，所有组件都设为"pending"状态
+    // 智能分析将由AI在首次对话中完成
+    const initialTable = {
         actor: {
             agent: { status: "pending", summary: "" },
             role: { status: "pending", summary: "" },
@@ -27,7 +30,7 @@ function createInitialStatusTable() {
             social: { status: "pending", summary: "" },
             economic: { status: "pending", summary: "" },
             time: { status: "pending", summary: "" },
-            location: { status: "pending",summary: "" },
+            location: { status: "pending", summary: "" },
             situation: { status: "pending", summary: "" }
         },
         communication: {
@@ -41,6 +44,8 @@ function createInitialStatusTable() {
             reason: { status: "pending", summary: "" }
         }
     };
+
+    return initialTable;
 }
 
 function statusTableToText(statusTable) {

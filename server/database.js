@@ -428,12 +428,14 @@ getUnfinishedScenarios: (userId) => {
         try {
             const stmt = db.prepare('SELECT status_table FROM scenarios WHERE id = ?');
             const result = stmt.get(scenarioId);
-            return result && result.status_table ? JSON.parse(result.status_table) : null;
+            return result && result.status_table ? JSON.parse(result.status_table) : {};
         } catch (error) {
             console.error('Error in getScenarioStatusTable:', error);
-            return null;
+            return {};
         }
     },
+
+    
 
     // 删除用户及其所有相关数据
     deleteUserAccount: (userId) => {

@@ -24,9 +24,6 @@
         <div class="chat-area">
           <h3>
             引导式提问
-            <span class="progress-display" v-if="scenarioStore.statusTable">
-              （当前进度：领域进度 {{ domainProgress.domains.completed }}/{{ domainProgress.domains.total }}，细节进度 {{ domainProgress.details.completed }}/{{ domainProgress.details.total }}）
-            </span>
           </h3>
           <div class="chat-messages" ref="chatContainer">
             <!-- 显示错误信息 -->
@@ -142,23 +139,7 @@
           <span v-else>生成场景</span>
         </button>
         
-        <!-- 根据对话生成场景的按钮，只有在状态表信息完整时才可点击 -->
-        <button 
-          @click="generateScenarioFromDialog" 
-          class="primary-btn"
-          :disabled="!isScenarioReady || scenarioStore.isGenerating"
-          title="状态表信息完整后方可使用"
-        >
-          根据对话生成场景
-        </button>
-        
-        <button 
-          @click="regenerateScenario" 
-          class="secondary-btn" 
-          :disabled="scenarioStore.isGenerating"
-        >
-          重新生成场景
-        </button>
+
         <button 
           @click="saveScenario" 
           class="success-btn" 
@@ -276,95 +257,9 @@ const loadUseCaseInfo = async () => {
   }
 }
 
-// 计算领域进度和细节进度
-const domainProgress = computed(() => {
-  if (!scenarioStore.statusTable) return { domains: { completed: 0, total: 5 }, details: { completed: 0, total: 29 } };
-  
-  console.log('状态表内容:', scenarioStore.statusTable); // 调试信息
-  
-  let completedDomains = 0;
-  let totalItems = 0;
-  let completedItems = 0;
-  
-  // 适配后端返回的状态表结构
-  const statusTable = scenarioStore.statusTable;
-  
-  // 遍历所有领域
-  const categories = Object.keys(statusTable);
-  console.log('领域列表:', categories); // 调试信息
-  
-  for (const category of categories) {
-    console.log('处理领域:', category); // 调试信息
-    let domainComplete = true;
-    const components = statusTable[category];
-    
-    if (components && typeof components === 'object') {
-      const componentKeys = Object.keys(components);
-      console.log('领域', category, '包含的组件:', componentKeys); // 调试信息
-      
-      for (const item of componentKeys) {
-        const component = components[item];
-        console.log('处理项目:', item, component); // 调试信息
-        totalItems++;
-        if (component && component.status === 'collected') {
-          completedItems++;
-          console.log('项目已收集:', item); // 调试信息
-        } else {
-          domainComplete = false;
-          console.log('项目未收集:', item); // 调试信息
-        }
-      }
-      
-      if (domainComplete) {
-        completedDomains++;
-        console.log('领域完成:', category); // 调试信息
-      }
-    }
-  }
-  
-  // 确保总项目数至少为29
-  const totalDetails = Math.max(totalItems, 29);
-  console.log('进度计算结果:', { 
-    domains: { completed: completedDomains, total: categories.length },
-    details: { completed: completedItems, total: totalDetails }
-  }); // 调试信息
-  
-  return { 
-    domains: { completed: completedDomains, total: categories.length },
-    details: { completed: completedItems, total: totalDetails }
-  };
-});
 
-// 计算场景是否准备好生成（状态表信息完整）
-const isScenarioReady = computed(() => {
-  if (!scenarioStore.statusTable) return false;
-  
-  // 检查是否有足够的信息来生成场景
-  // 至少需要收集一定数量的组件信息
-  let collectedCount = 0;
-  let totalCount = 0;
-  
-  const statusTable = scenarioStore.statusTable;
-  
-  for (const category in statusTable) {
-    const components = statusTable[category];
-    if (components && typeof components === 'object') {
-      for (const item in components) {
-        const component = components[item];
-        totalCount++;
-        if (component && component.status === 'collected') {
-          collectedCount++;
-        }
-      }
-    }
-  }
-  
-  console.log('场景准备状态计算:', { collectedCount, totalCount, ready: collectedCount >= 15 }); // 调试信息
-  
-  // 当至少收集了总数的一定比例（例如 15/29 ≈ 52%）时认为可以生成场景
-  // 或者可以根据业务逻辑设定更精确的标准
-  return collectedCount >= 15; // 至少需要15个组件的信息
-});
+
+
 
 // 自动滚动到底部
 const scrollToBottom = () => {
@@ -527,29 +422,7 @@ const startGeneration = async () => {
   }
 }
 
-// 重新生成场景
-const regenerateScenario = async () => {
-  console.log('重新生成场景')
-  
-  try {
-    // 重置场景状态
-    scenarioStore.clearConversation()
-    
-    // 获取当前项目名称
-    const currentProject = projectStore.projects.find(p => p.id == projectId.value);
-    const projectName = currentProject ? currentProject.project_name : '未知项目';
-    
-    // 构建更丰富的上下文信息
-    const contextMessage = `这是一个${projectName}系统的${actorName.value}执行"${useCaseName.value}"的场景。` +
-                          `请重新生成关于'${useCaseName.value}'的场景，我需要一个新的版本。` +
-                          `请重点关注这个特定场景的细节，包括行动者、意图、任务、环境和沟通等方面。`;
-    
-    // 重新开始场景生成流程
-    await scenarioStore.sendMessage(contextMessage);
-  } catch (error) {
-    console.error('重新生成场景失败:', error)
-  }
-}
+
 
 // 生成场景（根据用户选择：直接生成或开始引导式提问）
 const generateScenarioWithOptions = async () => {
@@ -620,39 +493,7 @@ const generateScenarioWithOptions = async () => {
   }
 }
 
-// 根据对话生成场景（使用状态表信息）
-const generateScenarioFromDialog = async () => {
 
-  
-  try {
-    // 获取当前项目名称
-    const currentProject = projectStore.projects.find(p => p.id == projectId.value);
-    const projectName = currentProject ? currentProject.project_name : '未知项目';
-    
-    // 使用当前的对话历史和状态表信息生成场景
-    const dialogSummary = scenarioStore.conversationHistory
-      .filter(msg => msg.role === 'user' || msg.role === 'assistant')
-      .map(msg => `${msg.role === 'user' ? '用户' : '系统'}: ${msg.content}`)
-      .join('\n');
-    
-    // 构建生成场景的提示
-    const prompt = `这是一个${projectName}系统的${actorName.value}执行"${useCaseName.value}"的场景。` +
-                  `基于以下对话内容生成详细的场景描述：\n\n${dialogSummary}\n\n` +
-                  `请生成一个结构化的场景文档，包含基本流、备选流和异常流。`;
-    
-    // 使用store方法调用API生成场景
-    await scenarioStore.generateSimpleScenario(
-      parseInt(projectId.value),
-      parseInt(useCaseId.value),
-      `Generated Scenario for ${useCaseName.value}`,
-      prompt
-    );
-    
-    alert('场景已根据对话生成！');
-  } catch (error) {
-    console.error('根据对话生成场景失败:', error)
-  }
-}
 
 // 提前生成场景
 const generateEarlyScenario = async () => {

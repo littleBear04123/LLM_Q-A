@@ -4,7 +4,7 @@
     <el-header v-if="showHeader" class="app-header">
       <div class="header-content">
         <div class="logo">
-          <h2>🎯 LLM需求用例生成系统</h2>
+          <h2>LLM需求用例生成系统</h2>
         </div>
         <div class="user-info">
           <span>欢迎，{{ userStore.currentUserName }}</span>
@@ -16,30 +16,36 @@
 
     <!-- 主内容区域 -->
     <el-main class="app-main">
-      <router-view></router-view>
+      <router-view></router-view> <!-- 占位符，根据当前路由路径，动态显示对应页面组件 -->
     </el-main>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useUserStore } from './stores/userStore'
-import { ElMessageBox, ElMessage } from 'element-plus'
+//从vue和其他地方导入需要的工具和模块
+import { computed, ref, onMounted } from 'vue'//vue库
+import { useRouter } from 'vue-router'//vue router路由库
+import { useUserStore } from './stores/userStore'//用户状态管理模块,来自./stores/userStore.js
+import { ElMessageBox, ElMessage } from 'element-plus'//Element Plus UI 组件库
 
-const router = useRouter()
+const router = useRouter()//调用vue router路由库,获取当前路由实例
+//可以通过router实例进行一些操作，比如跳转到指定路径，比如router.push('/projects')
 const userStore = useUserStore()
 
 // 响应式数据
 const globalLoading = ref(false)
 
 // 计算属性
-const showHeader = computed(() => {
+const showHeader = computed(() => {//计算属性，判断是否显示导航栏
+  //如果用户已认证且且当前路由不是登录页，就显示导航栏
+//导航栏就是这个当前文件1~22行的代码
   return userStore.isAuthenticated && router.currentRoute.value.name !== 'Login'
 })
 
+
 // 生命周期
-onMounted(async () => {
+onMounted(async () => {//页面一挂载就执行此函数。
+//检查是否已登录
   console.log('App.vue挂载完成，当前路由:', router.currentRoute.value.path)
   console.log('用户认证状态:', userStore.isAuthenticated)
   
@@ -51,16 +57,16 @@ onMounted(async () => {
   
   // 应用启动时检查会话有效性
   if (userStore.sessionToken) {
-    globalLoading.value = true
+    globalLoading.value = true//显示加载动画
     try {
-      const isValid = await userStore.checkSession()
+      const isValid = await userStore.checkSession()//检查会话有效性,在./stores/userStore.js中定义
       if (!isValid) {
         console.log('会话无效，执行登出')
         userStore.logout()
         router.replace('/login')
       }
     } catch (error) {
-      console.error('Session check failed:', error)
+      console.error('会话验证失败:', error)
       userStore.logout()
       router.replace('/login')
     } finally {
@@ -70,13 +76,13 @@ onMounted(async () => {
 })
 
 // 方法
-const handleLogout = () => {
+const handleLogout = () => {//退出登录按钮
   console.log('用户点击退出登录')
   userStore.logout()
   router.replace('/login')
 }
 
-const handleDeleteAccount = async () => {
+const handleDeleteAccount = async () => {//注销按钮
   try {
     await ElMessageBox.confirm(
       '注销账号后此账号所有数据将会被删除，是否注销？',

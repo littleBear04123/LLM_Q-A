@@ -19,6 +19,7 @@ router.post('/init', async (req, res) => {
         // const unfinishedScenarios = userModel.getUnfinishedScenarios(user.id);
         const unfinishedScenarios = [];
         
+        //返回用户信息和会话令牌
         res.json({
             success: true,
             user: { 

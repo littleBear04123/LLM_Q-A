@@ -4,7 +4,7 @@ import { useUserStore } from '../stores/userStore'
 const LoginView = () => import('../views/LoginView.vue')
 const UseCaseDiagramView = () => import('../views/UseCaseDiagramView.vue')
 const ScenarioView = () => import('../views/ScenarioView.vue')
-const EvaluationView = () => import('../views/EvaluationView.vue')
+
 
 const routes = [
   {
@@ -36,16 +36,6 @@ const routes = [
     meta: { 
       requiresAuth: true,
       title: '场景生成 - LLM用例生成系统'
-    },
-    props: true
-  },
-  {
-    path: '/evaluation/:scenarioId',
-    name: 'Evaluation',
-    component: EvaluationView,
-    meta: { 
-      requiresAuth: true,
-      title: '场景评价 - LLM用例生成系统'
     },
     props: true
   },

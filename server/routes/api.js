@@ -457,6 +457,8 @@ async function callDeepSeekAPI(prompt, context = null) {
 }
 
 请只输出有效的JSON格式，不要包含任何其他解释文字。
+
+重要提示：在首次对话时，请根据用户提供的初始输入智能地更新相关的状态表组件，标记为"collected"并添加摘要信息。例如，如果用户提到"用户登录系统"，请相应更新任务领域、行动者领域等组件的状态。
 `;
 
         // 如果有上下文信息，则增强系统提示词
@@ -618,10 +620,17 @@ router.post('/chat', async (req, res) => {
         userModel.saveMessage(scenario.id, 'user', userMessage);
 
         // 2. 获取当前场景的状态表和对话历史
-        const [statusTable, recentMessages] = await Promise.all([
+        // 如果是首次对话且有初始输入，则使用初始输入来智能初始化状态表
+        let [statusTable, recentMessages] = await Promise.all([
             getScenarioStatusTable(scenario.id),
             getRecentChatHistory(scenario.id)
         ]);
+        
+        // 如果是首次对话且状态表为空，使用初始输入智能初始化
+        if (recentMessages.length <= 2 && Object.keys(statusTable).length === 0) {
+            const { createInitialStatusTable } = require('../utils');
+            statusTable = createInitialStatusTable(userMessage);
+        }
 
         // 3. 构造发送给AI的提示词（包含已收集的信息摘要）
         let enhancedPrompt;

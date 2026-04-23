@@ -25,7 +25,7 @@
     "plantuml-encoder": "^1.4.0",
     "uuid": "^9.0.0",
     "vue": "^3.3.0",
-    "vue-router": "^4 Zion"
+    "vue-router": "^4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.0",

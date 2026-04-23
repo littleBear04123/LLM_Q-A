@@ -3,7 +3,7 @@
     <el-card class="login-card">
       <template #header>
         <div class="login-header">
-          <h2>🎯 欢迎使用LLM需求用例生成系统</h2>
+          <h2>欢迎使用LLM需求用例生成系统</h2>
           <p>请输入用户名开始使用</p>
         </div>
       </template>
@@ -11,7 +11,7 @@
       <el-form @submit.prevent="handleLogin">
         <el-form-item>
           <el-input 
-            v-model="username" 
+            v-model="username"
             placeholder="请输入用户名"
             size="large"
             @keyup.enter="handleLogin"
@@ -25,22 +25,13 @@
         <el-button 
           type="primary" 
           size="large" 
-          @click="handleLogin"
+          @click="handleLogin" 
           :loading="loading"
           style="width: 100%;"
         >
           {{ loading ? '登录中...' : '开始使用' }}
         </el-button>
       </el-form>
-      
-      <!-- 调试信息 -->
-      <div style="margin-top: 20px; font-size: 12px; color: #666;">
-        <p>调试信息:</p>
-        <p>用户名: {{ username }}</p>
-        <p>加载状态: {{ loading }}</p>
-        <p>用户Store认证状态: {{ userStore.isAuthenticated }}</p>
-        <p>当前路由: {{ $route.path }}</p>
-      </div>
     </el-card>
   </div>
 </template>
@@ -51,22 +42,23 @@ import { useUserStore } from '../stores/userStore';
 import { useRouter } from 'vue-router';
 import { User } from '@element-plus/icons-vue';
 
-const username = ref('');
+const username = ref('');//用户名输入框的值，与第15行代码有关
+//ref 函数会创建一个包含 value 属性的对象，这个 value 属性是响应式的。
+// 当用户输入用户名时，username.value会自动更新为用户输入的用户名
 const loading = ref(false);
 const userStore = useUserStore();
 const router = useRouter();
 
 console.log('LoginView组件加载完成');
 
-onMounted(() => {
-  // 检查是否已登录
+onMounted(() => {// 检查是否已登录，页面一挂载就执行此函数。
   if (userStore.isAuthenticated) {
     console.log('已登录，自动跳转到项目页')
     router.push('/projects');
   }
 });
 
-const handleLogin = async () => {
+const handleLogin = async () => {//async函数，用于处理登录操作，等待登录API返回
   console.log('点击登录按钮，用户名:', username.value);
   
   if (!username.value.trim()) {
@@ -79,7 +71,7 @@ const handleLogin = async () => {
   console.log('开始登录请求...');
   
   try {
-    const result = await userStore.login(username.value);
+    const result = await userStore.login(username.value);//这个函数在userStore.js中定义，用于登录用户
     console.log('登录API返回:', result);
     
     alert('登录成功！');
