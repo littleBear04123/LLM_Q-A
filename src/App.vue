@@ -305,36 +305,36 @@ html, body {
   color: var(--text-muted);
 }
 
-/* 全局Mermaid样式 */
-.mermaid-diagram svg {
+/* 全局PlantUML样式 */
+.plantuml-diagram svg {
   width: 100%;
   height: auto;
   max-width: 100%;
 }
 
-.mermaid-diagram .node rect {
+.plantuml-diagram .node rect {
   fill: #e8f4ff;
   stroke: var(--primary-color);
   stroke-width: 2px;
 }
 
-.mermaid-diagram .node ellipse {
+.plantuml-diagram .node ellipse {
   fill: var(--bg-secondary);
   stroke: var(--primary-color);
   stroke-width: 2px;
 }
 
-.mermaid-diagram .edgePath path {
+.plantuml-diagram .edgePath path {
   stroke: #666;
   stroke-width: 2px;
   fill: none;
 }
 
-.mermaid-diagram .edgePath marker path {
+.plantuml-diagram .edgePath marker path {
   fill: #666;
 }
 
-.mermaid-diagram .label {
+.plantuml-diagram .label {
   font-family: Arial, sans-serif;
   font-size: 14px;
   color: #333;

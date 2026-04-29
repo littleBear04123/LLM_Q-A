@@ -3,11 +3,11 @@ import { useUserStore } from './userStore'
 
 export const useProjectStore = defineStore('project', {
   state: () => ({
-    projects: [],
-    currentUMLCode: '',
-    useCases: [],
-    isLoading: false,
-    currentProject: null
+    projects: [],//用户的所有项目
+    currentUMLCode: '',//当前项目的UML代码
+    useCases: [],//当前项目的用例
+    isLoading: false,//是否正在加载项目
+    currentProject: null//当前项目
   }),
 
   getters: {
@@ -102,7 +102,7 @@ export const useProjectStore = defineStore('project', {
       this.isLoading = true
       
       try {
-        console.log('🔴 ========== UML生成调试开始 ==========')
+        console.log('========== UML生成调试开始 ==========')
         console.log('项目ID:', projectId)
         console.log('项目ID类型:', typeof projectId)
         console.log('会话Token:', userStore.sessionToken)
@@ -118,7 +118,7 @@ export const useProjectStore = defineStore('project', {
         console.log('找到的目标项目:', targetProject)
         
         if (!targetProject) {
-          console.error('❌ 项目不存在，可用项目ID:', this.projects.map(p => p.id))
+          console.error('项目不存在，可用项目ID:', this.projects.map(p => p.id))
           throw new Error(`项目ID ${projectId} 不存在，请选择有效的项目`)
         }
 
@@ -136,14 +136,14 @@ export const useProjectStore = defineStore('project', {
         
         if (!response.ok) {
           const errorText = await response.text()
-          console.error('❌ API响应错误:', errorText)
+          console.error('API响应错误:', errorText)
           throw new Error(`生成UML图失败: ${response.status} - ${errorText}`)
         }
 
         const data = await response.json()
-        console.log('✅ UML生成成功:', data)
+        console.log('UML生成成功:', data)
         
-        this.currentUMLCode = data.mermaidCode
+        this.currentUMLCode = data.plantUmlCode
         // 确保useCases数组结构正确
         this.useCases = Array.isArray(data.useCases) ? data.useCases.map(uc => ({
             id: uc.id || uc.use_case_id,
@@ -160,13 +160,13 @@ export const useProjectStore = defineStore('project', {
         if (projectId !== 'new') {
           const project = this.projects.find(p => p.id == projectId)
           if (project) {
-            project.uml_mermaid_code = data.mermaidCode
+            project.uml_plantuml_code = data.plantUmlCode
           }
         }
         
         return data
       } catch (error) {
-        console.error('🔴 Generate UML完整错误:', error)
+        console.error('Generate UML完整错误:', error)
         throw error
       } finally {
         this.isLoading = false
@@ -206,8 +206,8 @@ export const useProjectStore = defineStore('project', {
     // 设置当前项目（确保数据隔离）
     setCurrentProject(project) {
       this.currentProject = project;
-      if (project && project.uml_mermaid_code) {
-        this.currentUMLCode = project.uml_mermaid_code;
+      if (project && project.uml_plantuml_code) {
+        this.currentUMLCode = project.uml_plantuml_code;
       } else {
         this.currentUMLCode = '';
       }

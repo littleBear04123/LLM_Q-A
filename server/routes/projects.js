@@ -5,11 +5,11 @@ const { userModel, db } = require('../database');
 // 统一的会话验证中间件
 const validateSession = (req, res, next) => {
     if (!req.session || !req.session.user_id) {
-        console.log('❌ 项目路由 - 会话验证失败');
+        console.log('项目路由-会话验证失败');
         return res.status(401).json({ error: '请先登录' });
     }
     
-    console.log('✅ 项目路由 - 会话验证通过，用户ID:', req.session.user_id);
+    console.log('项目路由-会话验证通过，用户ID:', req.session.user_id);
     next();
 };
 
@@ -54,7 +54,7 @@ router.get('/user-projects', async (req, res) => {
         const projects = userModel.getProjectsByUser(req.session.user_id);
         res.json({ success: true, projects });
     } catch (error) {
-        console.error('Get projects error:', error);
+        console.error('获取项目列表失败:', error);
         res.status(500).json({ error: '获取项目列表失败' });
     }
 });
@@ -62,18 +62,18 @@ router.get('/user-projects', async (req, res) => {
 // 生成UML用例图
 router.post('/:id/generate-uml', async (req, res) => {
     try {
-        const projectId = req.params.id;
-        const { requirementText } = req.body;
+        const projectId = req.params.id;//从URL参数中获取项目ID
+        const { requirementText } = req.body;//从请求体中获取需求描述
 
         if (!requirementText) {
             return res.status(400).json({ error: '需求描述不能为空' });
         }
 
-        console.log('🔵 ========== 后端 UML生成开始 ==========');
+        console.log('========== 后端 UML生成开始 ==========');
         console.log('请求项目ID:', projectId);
         console.log('会话用户ID:', req.session.user_id);
         
-        // 直接查询数据库验证项目
+        //验证项目是否存在且属于当前用户
         let currentProject;
         try {
             const stmt = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?');
@@ -86,7 +86,7 @@ router.post('/:id/generate-uml', async (req, res) => {
         }
         
         if (!currentProject) {
-            console.error('❌ 项目验证失败');
+            console.error('项目验证失败');
             console.error('可用项目查询:');
             try {
                 const allProjects = userModel.getProjectsByUser(req.session.user_id);
@@ -97,30 +97,30 @@ router.post('/:id/generate-uml', async (req, res) => {
             return res.status(404).json({ error: '项目不存在或无权限访问' });
         }
 
-        console.log('✅ 项目验证通过:', currentProject);
+        console.log('项目验证通过:', currentProject);
         
         // 调用AI生成UML代码
-       console.log('✅ 项目验证通过:', currentProject);
+       console.log('项目验证通过:', currentProject);
 
 // 优先使用数据库中已有的UML代码，如果没有则生成新的
-let mermaidCode = currentProject.uml_mermaid_code;
+let plantUmlCode = currentProject.uml_plantuml_code;
 
-if (!mermaidCode || mermaidCode.trim() === '') {
-    console.log('未找到现有UML代码，正在生成新的...');
-    mermaidCode = await generateUMLWithAI(requirementText);
-    console.log('生成的Mermaid代码长度:', mermaidCode.length);
+if (!plantUmlCode || plantUmlCode.trim() === '') {
+    console.log('未找到现有UML代码，正在生成新的UML代码');
+    plantUmlCode = await generateUMLWithAI(requirementText);
+    console.log('生成的PlantUML代码长度:', plantUmlCode.length);
     
     // 保存UML代码到数据库（保存PlantUML格式）
-    userModel.updateProjectUML(projectId, mermaidCode);
+    userModel.updateProjectUML(projectId, plantUmlCode);
 } else {
     console.log('使用现有UML代码进行解析');
 }
 
-// 解析UML代码提取用例（使用PlantUML）
-const useCases = extractUseCasesFromMermaid(mermaidCode);
+// 解析UML代码提取用例
+const useCases = extractUseCasesFromPlantUML(plantUmlCode);
 console.log('提取的用例数量:', useCases.length);
         
-        // 关键修复：正确保存用例到数据库
+        // 保存用例到数据库
         const createdUseCases = [];
         for (const useCase of useCases) {
             try {
@@ -136,9 +136,9 @@ console.log('提取的用例数量:', useCases.length);
                     status: 'pending',
                     project_id: projectId
                 });
-                console.log('✅ 创建用例成功:', useCase.name);
+                console.log('创建用例成功:', useCase.name);
             } catch (dbError) {
-                console.error('❌ 创建用例失败:', useCase.name, '错误:', dbError.message);
+                console.error('创建用例失败:', useCase.name, '错误:', dbError.message);
                 // 即使数据库失败，也要返回用例信息给前端
                 createdUseCases.push({
                     id: generateUseCaseId(useCase.name),
@@ -151,7 +151,7 @@ console.log('提取的用例数量:', useCases.length);
             }
         }
 
-        console.log('✅ UML生成完成，用例已保存到数据库');
+        console.log('UML生成完成，用例已保存到数据库');
         
         // 从数据库获取最新的用例列表，确保数据一致性
         const savedUseCases = userModel.getUseCasesByProject(projectId);
@@ -168,12 +168,12 @@ console.log('提取的用例数量:', useCases.length);
         
         res.json({
             success: true,
-            mermaidCode: mermaidCode,  // 现在mermaidCode字段实际存储PlantUML代码
+            plantUmlCode: plantUmlCode,  // 现在plantUmlCode字段存储PlantUML代码
             useCases: formattedUseCases
         });
 
     } catch (error) {
-        console.error('❌ Generate UML error:', error);
+        console.error('生成UML图失败:', error);
         res.status(500).json({ error: '生成UML图失败: ' + error.message });
     }
 });
@@ -311,9 +311,9 @@ actor 读者
 
 
 
-// 从PlantUML代码中提取用例信息 - 简化版
-function extractUseCasesFromMermaid(plantUmlCode) {
-    console.log('🔍 ========== 开始解析PlantUML代码 ==========');
+// 从PlantUML代码中提取用例信息
+function extractUseCasesFromPlantUML(plantUmlCode) {
+    console.log('========== 开始解析PlantUML代码 ==========');
     
     const useCases = [];
     const lines = plantUmlCode.split('\n');
@@ -390,14 +390,14 @@ function extractUseCasesFromMermaid(plantUmlCode) {
                     description: `${realActor}执行${useCaseName}功能`
                 });
                 
-                console.log(`🔗 关联: ${realActor} -> ${useCaseName}`);
+                console.log(`关联: ${realActor} -> ${useCaseName}`);
             }
         }
     }
     
     // 如果没有找到关联关系，尝试从参与者和用例中构建基本关联
     if (useCases.length === 0) {
-        console.log('⚠️ 未找到关联关系，尝试构建基本用例');
+        console.log('未找到关联关系，尝试构建基本用例');
         
         // 从行中查找用例定义 (用例名称)
         for (const line of lines) {
@@ -424,13 +424,15 @@ function extractUseCasesFromMermaid(plantUmlCode) {
         }
     }
     
-    console.log(`✅ 最终提取 ${useCases.length} 个用例`);
+    console.log(`最终提取 ${useCases.length} 个用例`);
     console.log('提取的用例:', useCases);
     
     return useCases;
 }
 
 // 预处理PlantUML代码，展开嵌套结构
+//为后续的用例提取函数（如extractUseCasesFromPlantUML）提供干净的PlantUML代码，
+// 去除不必要的格式和容器包装，使得用例和参与者定义更容易被解析。
 function preprocessPlantUml(plantUmlCode) {
     const lines = plantUmlCode.split('\n');
     const processedLines = [];
@@ -504,7 +506,7 @@ function preprocessPlantUml(plantUmlCode) {
     return processedLines;
 }
 
-// 辅助函数：查找用例的精确参与者（适用于PlantUML）
+// 辅助函数：查找用例的精确参与者
 function findExactActorForUseCase(plantUmlCode, useCaseName, actors) {
     // 查找格式: actor --> (用例) 或 :actor: --> (用例)
     const lines = plantUmlCode.split('\n');
@@ -532,7 +534,7 @@ function findExactActorForUseCase(plantUmlCode, useCaseName, actors) {
 
 // 辅助函数：去除参与者名称前缀
 function removePrefixes(str) {
-    // 移除可能的前缀如 "actor "等
+    // 移除可能的前缀如 "actor"等
     return str.replace(/^actor\s+/i, '').trim();
 }
 
@@ -540,110 +542,6 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// PlantUML到Mermaid的转换函数
-function convertPlantUmlToMermaid(plantUmlCode) {
-    // 如果已经是Mermaid格式，直接返回
-    if (plantUmlCode.includes('graph ') || plantUmlCode.includes('flowchart ')) {
-        return plantUmlCode;
-    }
-    
-    // 提取PlantUML内容
-    const startMarker = plantUmlCode.indexOf('@startuml');
-    const endMarker = plantUmlCode.lastIndexOf('@enduml');
-    
-    let content = plantUmlCode;
-    if (startMarker !== -1 && endMarker !== -1) {
-        content = plantUmlCode.substring(startMarker + 9, endMarker); // 9 = length of '@startuml'
-    }
-    
-    // 初始化Mermaid代码
-    let mermaidCode = 'graph TD\n';
-    
-    // 分行处理PlantUML内容
-    const lines = content.split('\n').map(line => line.trim()).filter(line => line);
-    
-    // 存储节点定义
-    const nodes = new Map();
-    const edges = [];
-    
-    lines.forEach(line => {
-        // 处理参与者定义: actor 顾客 as Customer 或 :顾客:
-        const actorMatch = line.match(/actor\s+([^\s]+)(?:\s+as\s+(\w+))?/i);
-        if (actorMatch) {
-            const name = actorMatch[1];
-            const alias = actorMatch[2] || name;
-            const nodeId = sanitizeId(name);
-            nodes.set(nodeId, `[${name}]`);  // 方形表示参与者
-            return;
-        }
-        
-        // 处理别名定义 :名称:
-        const aliasMatch = line.match(/:([^:]+):/);
-        if (aliasMatch && !line.includes('-->') && !line.includes('->')) {
-            const name = aliasMatch[1].trim();
-            const nodeId = sanitizeId(name);
-            nodes.set(nodeId, `[${name}]`);  // 方形表示参与者
-            return;
-        }
-        
-        // 处理用例定义 (用例名称)
-        const useCaseMatch = line.match(/\(([^()]+)\)/);
-        if (useCaseMatch && !line.includes('-->') && !line.includes('->')) {
-            const name = useCaseMatch[1].trim();
-            const nodeId = sanitizeId(name);
-            nodes.set(nodeId, `(${name})`);  // 圆角矩形表示用例
-            return;
-        }
-        
-        // 处理关联关系: actor --> (usecase)
-        const relationMatch = line.match(/([^(]+)-->\s*\(([^)]+)\)|([^(]+)->\s*\(([^)]+)\)/);
-        if (relationMatch) {
-            let source = relationMatch[1] || relationMatch[3];
-            let target = relationMatch[2] || relationMatch[4];
-            
-            // 清理源和目标名称
-            source = source.replace(/[:]/g, '').trim();
-            target = target.trim();
-            
-            const sourceId = sanitizeId(source);
-            const targetId = sanitizeId(target);
-            
-            // 确保节点已定义
-            if (!nodes.has(sourceId)) {
-                // 判断是参与者还是用例
-                if (source.includes('(') || source.includes(')')) {
-                    nodes.set(sourceId, `(${source})`);
-                } else {
-                    nodes.set(sourceId, `[${source}]`);
-                }
-            }
-            
-            if (!nodes.has(targetId)) {
-                nodes.set(targetId, `(${target})`);  // 假设目标是用例
-            }
-            
-            edges.push(`${sourceId} --> ${targetId}`);
-        }
-    });
-    
-    // 添加节点定义
-    for (const [id, definition] of nodes) {
-        mermaidCode += `    ${id}${definition}\n`;
-    }
-    
-    // 添加边定义
-    for (const edge of edges) {
-        mermaidCode += `    ${edge}\n`;
-    }
-    
-    return mermaidCode;
-}
-
-// 辅助函数：清理ID，使其符合Mermaid语法
-function sanitizeId(str) {
-    // 替换特殊字符，保留字母数字和下划线
-    return str.replace(/[^\w\u4e00-\u9fa5]/g, '_').substring(0, 20);
-}
 
 // 生成用例ID
 function generateUseCaseId(name) {

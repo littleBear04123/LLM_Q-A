@@ -6,7 +6,7 @@ const { createInitialStatusTable, statusTableToText } = require('../utils');
 const { DIALOGUE_SYSTEM_PROMPT, SIMPLE_GENERATION_PROMPT } = require('../config/prompts');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-// 场景状态管理函数
+// 从数据库获取当前场景的状态表
 async function getScenarioStatusTable(scenarioId) {
     try {
         console.log(`🔍 获取场景 ${scenarioId} 的状态表`);
@@ -29,6 +29,7 @@ async function getScenarioStatusTable(scenarioId) {
     }
 }
 
+//更新场景状态表
 async function updateScenarioStatusTable(scenarioId, statusTable) {
     try {
         await userModel.updateScenarioStatusTable(scenarioId, statusTable);
@@ -37,6 +38,7 @@ async function updateScenarioStatusTable(scenarioId, statusTable) {
     }
 }
 
+//从数据库获取消息记录用于提供给ai作为上下文
 async function getRecentChatHistory(scenarioId) {
     if (!scenarioId) {
         return []; // 如果没有scenario ID，返回空历史
@@ -44,7 +46,7 @@ async function getRecentChatHistory(scenarioId) {
     
     try {
         // 从数据库获取指定场景的消息历史
-        const recentMessages = userModel.getMessageHistory(scenarioId, 20); // 获取最近20条消息
+        const recentMessages = userModel.getMessageHistory(scenarioId, 50); // 获取最近50条消息
         
         // 将数据库中的消息转换为API所需的格式
         const chatHistory = [];
@@ -80,29 +82,18 @@ async function getRecentChatHistory(scenarioId) {
 // 统一的会话验证中间件
 const validateSession = (req, res, next) => {
     if (!req.session || !req.session.user_id) {
-        console.log('❌ API路由 - 会话验证失败: 会话不存在或无用户ID');
+        console.log('API路由会话验证失败: 会话不存在或无用户ID');
         return res.status(401).json({ error: '未登录' });
     }
     
-    console.log('✅ API路由 - 会话验证通过，用户ID:', req.session.user_id);
+    console.log('API路由会话验证通过，用户ID:', req.session.user_id);
     next();
 };
 
 // 应用会话验证中间件
 router.use(validateSession);
 
-router.get('/history', async (req, res) => {
-    try {
-        // 对于历史记录路由，我们暂时返回空数组，因为需要知道具体的场景ID才能获取消息
-        // 实际应用中，可能需要重构此API以接收场景ID参数
-        const messages = [];
-        res.json({ messages });
-    } catch (error) {
-        console.error('History error:', error);
-        res.status(500).json({ error: '获取历史失败' });
-    }
-});
-
+// 保存用户和ai消息到数据库，确保内容会持久化储存
 router.post('/message', async (req, res) => {
     const { role, content, scenarioId } = req.body;
 
@@ -221,7 +212,7 @@ function mergeStatusUpdates(currentTable, aiSuggestedUpdates) {
     
     const updatedTable = JSON.parse(JSON.stringify(currentTable)); // 深拷贝
     
-    console.log('🔍 合并状态表更新:');
+    console.log('合并状态表更新:');
     console.log('当前状态表:', JSON.stringify(currentTable, null, 2));
     console.log('AI建议更新:', JSON.stringify(aiSuggestedUpdates, null, 2));
     
@@ -270,11 +261,11 @@ function mergeStatusUpdates(currentTable, aiSuggestedUpdates) {
         }
     }
     
-    console.log('✅ 合并后的状态表:', JSON.stringify(updatedTable, null, 2));
+    console.log('合并后的状态表:', JSON.stringify(updatedTable, null, 2));
     return updatedTable;
 }
 
-// 辅助函数：生成已收集信息的摘要
+// 辅助函数：从状态表中提取已收集的信息，用于提供给ai作为上下文
 function generateCollectedInfoSummary(statusTable) {
     const collectedInfo = [];
     
@@ -308,7 +299,7 @@ function countCollectedItems(statusTable) {
     return count;
 }
 
-// 辅助函数：解析AI回复，提取纯净内容并更新状态表
+// 辅助函数：解析ai回复，提取状态表并且更新状态表；同时提取下一问题
 function parseAIReply(reply, currentStatusTable) {
     let parsedReply = reply;
     let updatedTable = { ...currentStatusTable };
@@ -385,12 +376,14 @@ function parseAIReply(reply, currentStatusTable) {
     return { parsedReply, updatedStatusTable: updatedTable };
 }
 
-// DeepSeek API调用函数 - 用于对话式提问，返回结构化JSON
+// DeepSee API调用函数用于对话式提问，返回结构化JSON
+//提供了错误处理机制，捕获并记录异常情况
 async function callDeepSeekAPI(prompt, context = null) {
     const apiUrl = 'https://api.deepseek.com/chat/completions';
-    const apiKey = 'sk-852776dbae374cd0897001aa991243c6'; // 您的固定API密钥
+    const apiKey = 'sk-852776dbae374cd0897001aa991243c6'; // 我的固定API密钥
 
-    console.log('🔍 准备调用DeepSeek API:', {
+    //记录详细调试信息
+    console.log('准备调用DeepSeek API:', {
         hasContext: !!context,
         projectId: context?.projectId,
         useCaseId: context?.useCaseId,
@@ -488,34 +481,35 @@ async function callDeepSeekAPI(prompt, context = null) {
         // 添加当前用户消息
         messages.push({ role: 'user', content: prompt });
 
-        console.log('📤 发送API请求，消息数量:', messages.length);
+        console.log('发送API请求，消息数量:', messages.length);
 
+        //向deepseek聊天端点发送post请求
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/json'
+                'Content-Type': 'application/json', // 请求体为JSON格式
+                'Authorization': `Bearer ${apiKey}`,//使用api密钥进行身份验证
+                'Accept': 'application/json'//请求json格式的响应
             },
             body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: messages,
-                stream: false,
-                max_context_length: 131072, // 128K tokens
+                model: 'deepseek-chat',//指定使用的ai模型
+                messages: messages,//包含历史消息和当前用户消息
+                stream: false,//一次性返回完整回复
+                max_context_length: 131072, // 上下文最大长度为128K tokens
                 response_format: { "type": "json_object" }  // 请求JSON格式的响应
             })
         });
 
-        console.log('📥 API响应状态:', response.status, response.statusText);
+        console.log('API响应状态:', response.status, response.statusText);
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ API请求失败详情:', errorText);
+            console.error('API请求失败详情:', errorText);
             throw new Error(`API请求失败: ${response.status} ${response.statusText}. 详情: ${errorText}`);
         }
 
         const data = await response.json();
-        console.log('✅ API请求成功，原始响应:', data.choices?.[0]?.message?.content || '');
+        console.log('API请求成功，原始响应:', data.choices?.[0]?.message?.content || '');
 
         let content = data.choices[0].message.content;
 
@@ -530,7 +524,7 @@ async function callDeepSeekAPI(prompt, context = null) {
             if (parsedResponse.question && parsedResponse.statusUpdate) {
                 return parsedResponse;
             } else {
-                console.warn('⚠️ AI未返回预期的JSON结构，使用降级处理');
+                console.warn('AI未返回预期的JSON结构，使用降级处理');
                 // 降级处理：返回原始内容作为问题
                 return {
                     question: content,
@@ -538,7 +532,7 @@ async function callDeepSeekAPI(prompt, context = null) {
                 };
             }
         } catch (parseError) {
-            console.error('⚠️ JSON解析失败，使用降级处理:', parseError.message);
+            console.error('JSON解析失败，使用降级处理:', parseError.message);
             // 降级处理：返回原始内容作为问题
             return {
                 question: content,
@@ -546,12 +540,13 @@ async function callDeepSeekAPI(prompt, context = null) {
             };
         }
     } catch (error) {
-        console.error('🚨 DeepSeek API调用错误:', error.message);
+        console.error('DeepSeek API调用错误:', error.message);
         throw error; // 重新抛出错误，让上层处理
     }
 }
 
 // 用于简单场景生成的API调用函数
+//用户只和ai说了这个是什么场景，没有说具体细节的时候，用这个函数
 async function callSimpleScenarioAPI(prompt, systemPrompt) {
     const apiUrl = 'https://api.deepseek.com/chat/completions';
     const apiKey = 'sk-852776dbae374cd0897001aa991243c6';
@@ -582,7 +577,8 @@ async function callSimpleScenarioAPI(prompt, systemPrompt) {
     return data.choices[0].message.content;
 }
 
-// 对话API - 集成状态表功能
+// 对话API 集成功能
+//功能有：将用户信息和状态表中已收集的信息结合，生成上下文信息，发送给deepseek模型，获取回复，解析回复，返回给前端
 router.post('/chat', async (req, res) => {
     console.log('=== 收到用户请求 ===');
     console.log('用户消息:', req.body.message);
@@ -673,7 +669,7 @@ ${collectedInfoSummary}
         // 7. 保存更新后的状态表
         await updateScenarioStatusTable(scenario.id, updatedStatusTable);
 
-        // 8. 保存AI回复到数据库（只保存问题部分）
+        // 8. 保存AI回复到数据库（只保存问题部分，而不保存状态部分）
         userModel.saveMessage(scenario.id, 'assistant', nextQuestion);
 
         console.log('AI回复内容:', nextQuestion.substring(0, 100) + '...');
@@ -766,14 +762,14 @@ router.post('/generate', async (req, res) => {
 // 简单场景生成API - 用于提前生成场景
 router.post('/generate-simple', async (req, res) => {
     if (!req.session || !req.session.user_id) {
-        console.log('❌ 简单场景生成 - 会话验证失败');
+        console.log('简单场景生成 - 会话验证失败');
         return res.status(401).json({ error: '请先登录' });
     }
 
     try {
         const { projectId, useCaseId, title, initialInput } = req.body;
         
-        console.log('🔍 简单场景生成请求:', { projectId, useCaseId, title });
+        console.log('简单场景生成请求:', { projectId, useCaseId, title });
         
         // 使用简化的系统提示词，适合快速场景生成
         const simpleSystemPrompt = `你是一名软件需求分析师。请根据用户提供的信息，生成一个简洁但完整的场景描述。场景描述应包含基本流（主要步骤）、参与者、目标和简要的环境信息。`;
@@ -819,14 +815,14 @@ ${initialInput}
             userModel.updateScenarioContent(scenarioId, cleanedScenario, JSON.stringify(createInitialStatusTable()));
         }
 
-        console.log('✅ 简单场景生成成功');
+        console.log('简单场景生成成功');
         res.json({ 
             success: true, 
             scenario: cleanedScenario
         });
 
     } catch (error) {
-        console.error('❌ 简单场景生成错误:', error);
+        console.error('简单场景生成错误:', error);
         res.status(500).json({ error: '简单场景生成失败: ' + error.message });
     }
 });
@@ -844,7 +840,7 @@ router.post('/scenarios/save-edited', async (req, res) => {
             return res.status(400).json({ error: '缺少必要参数：projectId、useCaseId或content' });
         }
 
-        console.log('📝 保存编辑后的场景内容:', { projectId, useCaseId, contentLength: content.length });
+        console.log('保存编辑后的场景内容:', { projectId, useCaseId, contentLength: content.length });
 
         // 获取用户现有的场景（如果有）
         const existingScenarios = userModel.getScenariosByUseCase(useCaseId);
@@ -857,11 +853,11 @@ router.post('/scenarios/save-edited', async (req, res) => {
             const currentStatusTable = await getScenarioStatusTable(scenarioId);
             // 更新现有场景的内容和状态表
             userModel.updateScenarioContent(scenarioId, content, JSON.stringify(currentStatusTable));
-            console.log('✏️ 更新现有场景，ID:', scenarioId);
+            console.log('更新现有场景，ID:', scenarioId);
         } else {
             // 如果没有现有场景，则创建新场景
             scenarioId = userModel.createScenario(useCaseId, `Edited Scenario for Use Case ${useCaseId}`, content);
-            console.log('🆕 创建新场景，ID:', scenarioId);
+            console.log('创建新场景，ID:', scenarioId);
         }
 
         res.json({
@@ -871,7 +867,7 @@ router.post('/scenarios/save-edited', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ 保存编辑的场景失败:', error);
+        console.error('保存编辑的场景失败:', error);
         res.status(500).json({ error: '保存编辑的场景失败: ' + error.message });
     }
 });
@@ -890,7 +886,7 @@ router.post('/scenarios/:useCaseId/generate-diagram', async (req, res) => {
             return res.status(400).json({ error: '缺少场景内容' });
         }
 
-        console.log('🎨 开始生成场景图，用例ID:', useCaseId, '项目ID:', projectId);
+        console.log('开始生成场景图，用例ID:', useCaseId, '项目ID:', projectId);
 
         // 从数据库获取场景内容
         const scenario = userModel.getScenarioByUseCase(useCaseId);
@@ -927,12 +923,12 @@ router.post('/scenarios/:useCaseId/generate-diagram', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ 生成场景图失败:', error);
+        console.error('生成场景图失败:', error);
         res.status(500).json({ error: '生成场景图失败: ' + error.message });
     }
 });
 
-// 获取场景消息历史API
+// 获取场景界面消息历史（就是和ai对话的记录）API
 router.get('/scenarios/:useCaseId/messages', async (req, res) => {
     if (!req.session || !req.session.user_id) {
         return res.status(401).json({ error: '请先登录' });
@@ -1031,50 +1027,6 @@ router.post('/plantuml/render', async (req, res) => {
 
         console.log('收到PlantUML渲染请求，代码长度:', plantumlCode.length);
 
-        // 清理PlantUML代码，修复常见语法错误
-        // const cleanPlantUmlCode = (code) => {
-        //     // 移除PlantUML代码中的错误语法，如 if (...) then (...) 中的标签
-        //     let cleaned = code
-        //         // 修复 $1 占位符问题，替换为有意义的条件
-        //         .replace(/if\s*\(\$1\)/g, 'if (条件满足)')
-        //         .replace(/if\s*\(\s*\)/g, 'if (条件)')
-                
-        //         // 移除 if-then-else 中的标签，如 (是), (否), (成功), (失败) 等
-        //         .replace(/if\s*\([^)]+\)\s+then\s*\([^)]+\)/g, 'if ($1) then')
-        //         .replace(/else\s*\([^)]+\)/g, 'else')
-        //         .replace(/elseif\s*\([^)]+\)/g, 'elseif')
-                
-        //         // 修复 repeat 结构，确保有结束标记
-        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*repeat again/g, 'repeat\n$1end repeat')
-        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*repeat\s+again/g, 'repeat\n$1end repeat')
-        //         .replace(/repeat\s*\n((?:(?!repeat|end|forever|while)[^\n]*\n?)*)\s*->\s*BACK/g, 'repeat\n$1end repeat')
-                
-        //         // 修复可能的未闭合结构
-        //         .replace(/repeat\s*\n((?:(?!repeat|end)[^\n]*\n?)*)\s*(?=partition|stop|@enduml)/g, 'repeat\n$1end repeat\n')
-                
-        //         // 修复未闭合的if结构
-        //         .replace(/if\s*\([^)]+\)\s+then\s*\n((?:(?!if|endif)[^\n]*\n?)*)\s*(?=partition|stop|@enduml)/g, 'if ($1) then\n$2endif\n')
-                
-        //         // 确保每行开头没有多余的空白
-        //         .split('\n')
-        //         .map(line => line.trim())
-        //         .join('\n')
-                
-        //         // 确保@startuml和@enduml标签单独占一行
-        //         .replace(/@startuml/g, '\n@startuml\n')
-        //         .replace(/@enduml/g, '\n@enduml\n')
-                
-        //         // 清理多余的空白行
-        //         .replace(/\n\s*\n\s*\n/g, '\n\n')
-        //         .trim();
-                
-        //     return cleaned;
-        // };
-
-        // const cleanedCode = cleanPlantUmlCode(plantumlCode);
-        // console.log('处理后的PlantUML代码:', cleanedCode.substring(0, 200) + '...'); // 调试信息
-
-        // 使用plantuml-encoder库进行编码（与用例图相同的方式）
         const plantumlEncoder = require('plantuml-encoder');
         const encodedCode = plantumlEncoder.encode(plantumlCode);
         

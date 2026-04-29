@@ -22,7 +22,7 @@
       <!-- 中间：UML图表展示 -->
       <div class="center-panel">
         <UMLDiagram 
-          :mermaid-code="projectStore.currentUMLCode"
+          :plant-uml-code="projectStore.currentUMLCode"
           :loading="projectStore.isLoading"
           :use-cases="projectStore.useCases"
           @use-case-click="handleUseCaseClick"
@@ -130,8 +130,8 @@ const handleProjectChange = async (projectId) => {
       projectStore.setCurrentProject(project)
       
       // 如果项目已有UML代码，设置当前UML代码
-      if (project.uml_mermaid_code) {
-        projectStore.currentUMLCode = project.uml_mermaid_code
+      if (project.uml_plantuml_code) {
+        projectStore.currentUMLCode = project.uml_plantuml_code
       }
     }
     

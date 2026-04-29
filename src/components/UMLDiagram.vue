@@ -32,7 +32,7 @@
         </div>
         
         <el-button 
-          v-if="mermaidCode" 
+          v-if="plantUmlCode" 
           type="primary" 
           link 
           @click="handleRefresh"
@@ -52,24 +52,24 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="!mermaidCode" class="empty-state">
+      <div v-else-if="!plantUmlCode" class="empty-state">
         <el-icon class="empty-icon"><Picture /></el-icon>
         <p>请输入需求描述生成用例图</p>
       </div>
 
       <!-- UML图表 -->
-      <div v-else class="mermaid-wrapper" @wheel="handleWheel">
+      <div v-else class="plantuml-wrapper" @wheel="handleWheel">
         <div 
-          class="mermaid-container"
+          class="plantuml-container"
           :style="{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'center center'
           }"
         >
           <div 
-            ref="mermaidRef" 
-            class="mermaid-diagram"
-            v-html="mermaidSvg"
+            ref="plantUmlRef" 
+            class="plantuml-diagram"
+            v-html="plantUmlSvg"
           ></div>
         </div>
       </div>
@@ -83,17 +83,17 @@ import plantumlEncoder from 'plantuml-encoder';
 import { Refresh, Loading, Picture, ZoomIn, ZoomOut, FullScreen } from '@element-plus/icons-vue';
 
 const props = defineProps({
-  mermaidCode: String,
+  plantUmlCode: String,
   loading: Boolean,
   useCases: Array
 });
 
 const emit = defineEmits(['use-case-click']);
 
-const mermaidRef = ref(null);
+const plantUmlRef = ref(null);
 const isRendering = ref(false);
 const lastClickedUseCase = ref('');
-const mermaidSvg = ref('');
+const plantUmlSvg = ref('');
 
 // 缩放相关状态
 const zoomLevel = ref(1.0);
@@ -140,7 +140,7 @@ const renderPlantUml = async (code) => {
   try {
     // 如果是空代码，显示空状态
     if (!code || code.trim() === '') {
-      mermaidSvg.value = '<div class="empty-plantuml">等待PlantUML代码...</div>';
+      plantUmlSvg.value = '<div class="empty-plantuml">等待PlantUML代码...</div>';
       return;
     }
     
@@ -191,7 +191,7 @@ const renderPlantUml = async (code) => {
     }
     
     // 设置SVG内容
-    mermaidSvg.value = svgContent;
+    plantUmlSvg.value = svgContent;
     
     nextTick(() => {
       addClickEvents();
@@ -202,7 +202,7 @@ const renderPlantUml = async (code) => {
   } catch (error) {
     console.error('PlantUML渲染错误:', error);
     // 显示更友好的错误信息
-    mermaidSvg.value = `
+    plantUmlSvg.value = `
       <div class="error">
         <h4>图表渲染失败</h4>
         <p>原因: ${error.message}</p>
@@ -216,7 +216,7 @@ const renderPlantUml = async (code) => {
 };
 
 // 监听PlantUML代码变化
-watch(() => props.mermaidCode, async (newCode) => {
+watch(() => props.plantUmlCode, async (newCode) => {
   if (!isRendering.value) {
     await renderPlantUml(newCode);
   }
@@ -230,9 +230,9 @@ function encodeForPlantUml(text) {
 
 // 点击事件处理
 const addClickEvents = () => {
-  if (!mermaidRef.value) return;
+  if (!plantUmlRef.value) return;
   
-  const svgElement = mermaidRef.value.querySelector('svg');
+  const svgElement = plantUmlRef.value.querySelector('svg');
   if (!svgElement) {
     console.warn('未找到SVG元素');
     return;
@@ -259,14 +259,14 @@ const addClickEvents = () => {
 };
 
 const handleRefresh = () => {
-  if (props.mermaidCode && !isRendering.value) {
-    renderPlantUml(props.mermaidCode);
+  if (props.plantUmlCode && !isRendering.value) {
+    renderPlantUml(props.plantUmlCode);
   }
 };
 
 onMounted(() => {
-  if (props.mermaidCode) {
-    renderPlantUml(props.mermaidCode);
+  if (props.plantUmlCode) {
+    renderPlantUml(props.plantUmlCode);
   }
 });
 </script>
@@ -336,7 +336,7 @@ onMounted(() => {
   transform: translate(-50%, -50%);
 }
 
-.mermaid-wrapper {
+.plantuml-wrapper {
   width: 100%;
   height: 100%;
   display: flex;
@@ -347,14 +347,14 @@ onMounted(() => {
   min-height: 500px;
 }
 
-.mermaid-container {
+.plantuml-container {
   transition: transform 0.3s ease;
   display: inline-block;
   max-width: 100%;
   max-height: 100%;
 }
 
-.mermaid-diagram {
+.plantuml-diagram {
   display: inline-block;
   max-width: 100%;
 }

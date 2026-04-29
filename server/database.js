@@ -27,7 +27,7 @@ function initializeTables() {
             project_name VARCHAR(100) NOT NULL,
             description TEXT,
             requirement_text TEXT NOT NULL,
-            uml_mermaid_code TEXT,
+            uml_plantuml_code TEXT,
             uml_image_path TEXT,
             status VARCHAR(20) DEFAULT 'active',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -186,14 +186,14 @@ const userModel = {
         }
     },
 
-    updateProjectUML: (projectId, mermaidCode) => {
+    updateProjectUML: (projectId, plantUmlCode) => {
         try {
             const stmt = db.prepare(`
                 UPDATE projects 
-                SET uml_mermaid_code = ?, updated_at = CURRENT_TIMESTAMP 
+                SET uml_plantuml_code = ?, updated_at = CURRENT_TIMESTAMP 
                 WHERE id = ?
             `);
-            stmt.run(mermaidCode, projectId);
+            stmt.run(plantUmlCode, projectId);
         } catch (error) {
             console.error('Error in updateProjectUML:', error);
             throw error;
