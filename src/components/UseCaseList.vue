@@ -76,6 +76,8 @@ import { ref, computed } from 'vue'
 import { Search, Loading, List, User } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
+// 组件属性
+// 用例列表数据
 const props = defineProps({
   useCases: {
     type: Array,
@@ -84,6 +86,8 @@ const props = defineProps({
   loading: Boolean
 })
 
+// 组件事件
+// 用例选择事件
 const emit = defineEmits(['use-case-select'])
 
 const router = useRouter()
@@ -109,14 +113,14 @@ const uniqueUseCases = computed(() => {
     console.log('UseCaseList: 没有用例数据')
     return []
   }
-  
+  // 打印调试信息
   console.log('UseCaseList: 接收到的用例数量', props.useCases.length)
   console.log('UseCaseList: 接收到的用例数据', props.useCases)
   console.log('UseCaseList: 搜索文本', searchText.value)
   console.log('UseCaseList: 搜索类型', searchType.value)
-  
+  // 严格去重逻辑
   const uniqueMap = new Map()
-  
+  // 遍历所有用例
   props.useCases.forEach(useCase => {
     // 确保用例对象包含必需的字段
     if (!useCase.use_case_name || !useCase.actor) {
@@ -213,7 +217,7 @@ const handleSelectUseCase = (useCase) => {
     })
   }
 }
-
+// 获取状态类型
 const getStatusType = (status) => {
   const types = {
     pending: 'info',

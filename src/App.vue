@@ -76,13 +76,14 @@ onMounted(async () => {//页面一挂载就执行此函数。
 })
 
 // 方法
-const handleLogout = () => {//退出登录按钮
+//退出登录按钮
+const handleLogout = () => {
   console.log('用户点击退出登录')
-  userStore.logout()
-  router.replace('/login')
+  userStore.logout()//将pinia中的用户状态清空
+  router.replace('/login')//跳转到登录页
 }
-
-const handleDeleteAccount = async () => {//注销按钮
+//注销按钮
+const handleDeleteAccount = async () => {
   try {
     await ElMessageBox.confirm(
       '注销账号后此账号所有数据将会被删除，是否注销？',

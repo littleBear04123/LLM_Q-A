@@ -1,0 +1,118 @@
+5.2.3 用户管理模块
+
+功能描述：处理用户注册、登录、会话管理和账户删除。
+
+主要接口：
+POST /api/users/init：用户初始化/登录
+DELETE /api/users/delete-account：删除用户账户
+
+核心方法：
+findOrCreate(username)：查找或创建用户
+createSession(userId)：创建用户会话
+getSessionByToken(token)：根据令牌获取会话信息
+updateSessionActivity(sessionId)：更新会话活跃时间
+
+5.2.4 项目管理模块
+
+功能描述：管理用户项目，包括创建、获取、删除和UML图生成。
+
+主要接口：
+POST /api/projects：创建项目
+GET /api/projects/user-projects：获取用户项目列表
+POST /api/projects/:id/generate-uml：生成UML图
+
+核心方法：
+createProject(userId, projectName, description, requirementText)：创建项目
+getProjectsByUser(userId)：获取用户项目
+updateProjectUML(projectId, plantUmlCode)：更新项目UML代码
+
+5.2.5 用例管理模块
+
+功能描述：管理项目中的用例，包括创建、状态更新等。
+
+主要接口：
+GET /api/usecases：获取用例列表
+PUT /api/usecases/:id/status：更新用例状态
+
+核心方法：
+createUseCase(projectId, useCaseName, actor, description)：创建用例
+getUseCasesByProject(projectId)：获取项目用例列表
+updateUseCaseStatus(useCaseId, status)：更新用例状态
+
+5.2.6 场景对话模块
+
+功能描述：实现AI驱动的场景对话，包括状态表管理、消息记录等。
+
+主要接口：
+POST /api/scenarios/:useCaseId/chat：场景对话
+GET /api/scenarios/:useCaseId/messages：获取消息历史
+POST /api/scenarios/:useCaseId/generate：生成场景
+POST /api/scenarios/:useCaseId/generate-simple：简单场景生成
+POST /api/scenarios/:useCaseId/save-edited：保存编辑的场景
+POST /api/scenarios/:useCaseId/generate-diagram：生成场景图
+GET /api/scenarios/:useCaseId/get-scenario：获取场景内容
+GET /api/scenarios/:useCaseId/diagram：获取场景图代码
+
+核心方法：
+getScenarioStatusTable(scenarioId)：获取场景状态表
+updateScenarioStatusTable(scenarioId, statusTable)：更新状态表
+getRecentChatHistory(scenarioId)：获取对话历史
+mergeStatusUpdates(currentTable, aiSuggestedUpdates)：合并状态更新
+callDeepSeekAPI(prompt, context)：调用DeepSeek API
+parseAIReply(reply, currentStatusTable)：解析AI回复
+
+5.2.7 AI集成模块
+
+功能描述：集成DeepSeek API进行智能对话和内容生成。
+
+核心方法：
+callDeepSeekAPI(prompt, context)：用于对话的API调用
+callSimpleScenarioAPI(prompt, systemPrompt)：用于简单场景生成的API调用
+
+5.2.8 图形生成模块
+
+功能描述：生成PlantUML代码和渲染图表。
+
+主要接口：
+POST /api/plantuml/render：渲染PlantUML
+
+5.2.9 会话管理机制
+
+系统采用自定义的会话管理机制，不依赖传统的Express Session中间件，而是通过以下方式实现：
+
+客户端在请求头中携带 X-Session-Token
+服务器端通过 sessionMiddleware 中间件验证会话令牌
+验证成功后将用户信息附加到 req.session 对象
+自动更新会话的最后活跃时间
+
+5.2.10 状态表管理机制
+
+系统实现了基于五域模型的状态表管理系统：
+
+行动者领域：代理、角色、群体、组织、物理结构
+意图领域：目标、目的、计划、政策
+任务领域：任务、行动、程序、资源、对象、事件、状态
+环境领域：物理环境、社会环境、经济环境、时间、位置、情境
+沟通领域：态度、假设、期望、误解、论点、解释、决策、理由
+
+每个组件都有状态（pending/collected）和摘要信息，系统通过AI对话逐步收集和完善信息。
+
+5.2.11 错误处理机制
+
+系统实现了多层错误处理：
+API请求级别的错误处理
+数据库操作级别的错误处理
+AI API调用的错误处理
+会话验证的错误处理
+
+5.2.12 安全机制
+
+会话令牌验证
+数据库外键约束保护数据完整性
+输入验证和清理
+API密钥保护
+
+5.2.13 部署配置
+
+开发环境：Vite前端开发服务器 + Express后端
+生产环境：Express服务器提供API + 静态文件服务

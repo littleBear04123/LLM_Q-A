@@ -47,7 +47,8 @@ function createInitialStatusTable(sceneDescription = "") {
 
     return initialTable;
 }
-
+// 状态表转换为文本
+// 用于将状态表转换为文本格式，方便给ai分析
 function statusTableToText(statusTable) {
     let text = "当前信息收集状态：\n";
     
@@ -61,7 +62,8 @@ function statusTableToText(statusTable) {
     
     return text;
 }
-
+// 获取分类名称
+// 用于将状态表中的分类转换为中文名称
 function getCategoryName(category) {
     const names = {
         actor: '行动者',
@@ -72,7 +74,8 @@ function getCategoryName(category) {
     };
     return names[category] || category;
 }
-
+// 获取组件名称
+// 用于将状态表中的组件转换为中文名称
 function getComponentName(component) {
     const names = {
         agent: '代理', role: '角色', group: '群体', organization: '组织', physicalStructure: '物理结构',
@@ -84,7 +87,27 @@ function getComponentName(component) {
     return names[component] || component;
 }
 
+// 生成已收集信息的摘要
+function generateCollectedInfoSummary(statusTable) {
+    const collectedInfo = [];
+    
+    for (const [field, components] of Object.entries(statusTable)) {
+        for (const [component, data] of Object.entries(components)) {
+            if (data.status === 'collected' && data.summary) {
+                collectedInfo.push(`${field}.${component}: ${data.summary}`);
+            }
+        }
+    }
+    
+    if (collectedInfo.length === 0) {
+        return '暂无已收集的信息。';
+    }
+    
+    return collectedInfo.join('\n');
+}
+
 module.exports = {
     createInitialStatusTable,
-    statusTableToText
+    statusTableToText,
+    generateCollectedInfoSummary
 };

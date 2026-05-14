@@ -18,6 +18,7 @@ export const useUserStore = defineStore('user', {
   },
 
   actions: {//方法
+    // 登录方法
     async login(username) {//使用 fetch API 发送 POST 请求到 /api/users/init，包含用户名作为请求体参数
       try {
         console.log('发起登录请求，用户名:', username);
@@ -50,7 +51,7 @@ export const useUserStore = defineStore('user', {
         throw error;
       }
     },
-
+   // 登出方法
     logout() {
       console.log('执行登出操作');
       this.user = null;

@@ -452,8 +452,8 @@ const generateScenarioWithOptions = async () => {
                       `基于以下对话内容生成详细的场景描述：\n\n${dialogSummary}\n\n` +
                       `请生成一个结构化的场景文档，包含基本流、备选流和异常流。`;
         
-        // 使用store方法调用API生成场景
-        await scenarioStore.generateSimpleScenario(
+        // 使用store方法调用API生成复杂场景（利用状态表数据）
+        await scenarioStore.generateScenario(
           parseInt(projectId.value),
           parseInt(useCaseId.value),
           `Generated Scenario for ${useCaseName.value}`,
@@ -538,12 +538,23 @@ const generateEarlyScenario = async () => {
       
       // 使用store方法调用API生成场景
       try {
-        await scenarioStore.generateSimpleScenario(
-          parseInt(projectId.value),
-          parseInt(useCaseId.value),
-          `Simple Scenario for ${useCaseName.value}`,
-          prompt
-        );
+        // 如果有对话历史，使用复杂场景生成（利用状态表数据）
+        if (hasConversations) {
+          await scenarioStore.generateScenario(
+            parseInt(projectId.value),
+            parseInt(useCaseId.value),
+            `Generated Scenario for ${useCaseName.value}`,
+            prompt
+          );
+        } else {
+          // 如果没有对话历史，使用简单场景生成
+          await scenarioStore.generateSimpleScenario(
+            parseInt(projectId.value),
+            parseInt(useCaseId.value),
+            `Simple Scenario for ${useCaseName.value}`,
+            prompt
+          );
+        }
         alert('场景已生成！');
       } catch (error) {
         console.error('简单场景生成失败:', error);
@@ -667,7 +678,7 @@ const renderPlantUml = async (code) => {
     // 通过后端代理获取SVG内容（绕过CORS限制）
     const userStore = useUserStore();
     
-    const response = await fetch('/api/plantuml/render', {
+    const response = await fetch('/api/scenarios/plantuml/render', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -712,7 +723,7 @@ const renderPlantUmlToSvg = async (code) => {
     // 通过后端获取处理过的PlantUML代码
     const userStore = useUserStore();
     
-    const response = await fetch('/api/plantuml/render', {
+    const response = await fetch('/api/scenarios/plantuml/render', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -98,6 +98,7 @@ function initializeTables() {
 initializeTables();
 
 const userModel = {
+    // 查找或创建用户
     findOrCreate: (username) => {
         try {
             let stmt = db.prepare('SELECT * FROM users WHERE username = ?');
@@ -115,7 +116,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 会话相关操作
     createSession: (userId) => {
         try {
             const sessionToken = uuidv4();
@@ -131,7 +132,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 根据会话Token获取会话信息
     getSessionByToken: (token) => {
         try {
             const stmt = db.prepare(`
@@ -146,7 +147,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 更新会话活跃时间
     updateSessionActivity: (sessionId) => {
         try {
             const stmt = db.prepare('UPDATE sessions SET last_active = CURRENT_TIMESTAMP WHERE id = ?');
@@ -158,6 +159,7 @@ const userModel = {
     },
 
     // 项目相关操作
+    // 创建项目
     createProject: (userId, projectName, description, requirementText) => {
         try {
             const stmt = db.prepare(`
@@ -171,7 +173,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 获取用户创建的项目
     getProjectsByUser: (userId) => {
         try {
             const stmt = db.prepare(`
@@ -185,7 +187,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 更新项目PlantUML代码
     updateProjectUML: (projectId, plantUmlCode) => {
         try {
             const stmt = db.prepare(`
@@ -214,7 +216,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 获取项目下的所有用例
     getUseCasesByProject: (projectId) => {
         try {
             const stmt = db.prepare(`
@@ -228,7 +230,7 @@ const userModel = {
             throw error;
         }
     },
-
+// 更新用例状态
     updateUseCaseStatus: (useCaseId, status) => {
         try {
             const stmt = db.prepare('UPDATE use_cases SET status = ? WHERE id = ?');
@@ -309,7 +311,7 @@ getUnfinishedScenarios: (userId) => {
             throw error;
         }
     },
-
+// 获取用例下的所有场景
     getScenariosByUseCase: (useCaseId) => {
         try {
             const stmt = db.prepare(`
@@ -322,7 +324,7 @@ getUnfinishedScenarios: (userId) => {
             throw error;
         }
     },
-
+// 更新场景内容
     updateScenarioContent: (scenarioId, generatedScenario, statusTable, scenarioPlantUmlCode = null) => {
         try {
             let stmt;
@@ -348,7 +350,7 @@ getUnfinishedScenarios: (userId) => {
             throw error;
         }
     },
-
+// 获取用例下的第一个场景
     getScenarioByUseCase: (useCaseId) => {
         try {
             const stmt = db.prepare(`

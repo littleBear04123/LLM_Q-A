@@ -68,6 +68,7 @@
 <script>
 import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/userStore'
 
 export default {
   name: 'ChatView',
@@ -88,20 +89,20 @@ export default {
     const isSending = ref(false)
     const status = ref('就绪')
     const messagesRef = ref(null)
-
+// 状态类
     const statusClass = computed(() => ({
       'status-ready': status.value === '就绪',
       'status-sending': status.value === '发送中',
       'status-error': status.value === '错误'
     }))
-
+// 滚动到最底部
     const scrollToBottom = async () => {
       await nextTick()
       if (messagesRef.value) {
         messagesRef.value.scrollTop = messagesRef.value.scrollHeight
       }
     }
-
+// 添加消息
     const addMessage = (content, type, isError = false) => {
       const message = {
         id: Date.now(),
@@ -114,14 +115,18 @@ export default {
       messages.value.push(message)
       scrollToBottom()
     }
-
+// 发送消息
     const apiSendMessage = async (message) => {
+      // 从用户store获取会话token
+      const userStore = useUserStore();
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-Token': userStore.sessionToken
         },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message, context: null })  // 通用聊天，无上下文
       })
       
       if (!response.ok) {
@@ -147,7 +152,7 @@ export default {
       try {
         const response = await apiSendMessage(content)
         isTyping.value = false
-        addMessage(response.reply, 'bot')
+        addMessage(response.response || response.reply, 'bot')
         status.value = '就绪'
       } catch (error) {
         console.error('错误:', error)

@@ -57,7 +57,7 @@ export const useScenarioStore = defineStore('scenario', {
       this.currentAssistantResponse = '';
       this.generatedContent = '';
     },
-
+// 发送消息到后端 - 场景对话模式
     async initializeFromStorage() {
       // 构建特定于项目和用例的存储键
       const projectId = this.currentScenario?.projectId;
@@ -155,6 +155,7 @@ export const useScenarioStore = defineStore('scenario', {
         }
       }
     },
+    // 发送消息到后端
     async sendMessage(message) {
       const userStore = useUserStore()
       this.isGenerating = true
@@ -174,7 +175,6 @@ export const useScenarioStore = defineStore('scenario', {
             actorName: this.currentScenario?.actorName
           }
         };
-        
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
@@ -183,57 +183,14 @@ export const useScenarioStore = defineStore('scenario', {
           },
           body: JSON.stringify(requestData)
         })
-        
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage = errorData.error || `API请求失败: ${response.status} ${response.statusText}`;
           throw new Error(errorMessage);
         }
-        
         const data = await response.json()
-        
-        // 从完整回复中提取用户可见部分，过滤掉内部状态表信息和格式符号
-        const fullResponse = data.reply || '';
-        let userVisibleResponse = fullResponse;
-        
-        // 检查回复是否包含状态表标记
-        const statusMarkers = ['【行动者领域】', '【意图领域】', '【任务领域】', '【环境领域】', '【沟通领域】'];
-        let hasStatusTable = false;
-        let firstMarkerIndex = -1;
-        
-        for (const marker of statusMarkers) {
-          const markerIndex = userVisibleResponse.indexOf(marker);
-          if (markerIndex !== -1) {
-            hasStatusTable = true;
-            if (firstMarkerIndex === -1 || markerIndex < firstMarkerIndex) {
-              firstMarkerIndex = markerIndex;
-            }
-          }
-        }
-        
-        // 如果存在状态表标记且不在开头，则截取前面的内容；否则显示全部内容
-        if (hasStatusTable && firstMarkerIndex > 0) {
-            userVisibleResponse = userVisibleResponse.substring(0, firstMarkerIndex).trim();
-        } else if (hasStatusTable && firstMarkerIndex === 0) {
-            // 如果状态表标记在开头，显示完整回复，因为可能AI先返回状态表再返回问题
-            userVisibleResponse = fullResponse;
-        }
-        
-        // 确保至少显示一些内容，即使过滤后为空
-        if (!userVisibleResponse.trim()) {
-            userVisibleResponse = fullResponse.substring(0, 300); // 显示前300个字符作为后备
-        }
-        
-        // 清理格式符号，提升用户阅读体验
-        // 移除星号
-        userVisibleResponse = userVisibleResponse.replace(/\*/g, '');
-        // 只移除连续的空行，保留有意义的换行
-        userVisibleResponse = userVisibleResponse.replace(/\n\s*\n/g, '\n\n');
-        // 清理每行开头和结尾的空白字符
-        userVisibleResponse = userVisibleResponse.split('\n').map(line => line.trim()).join('\n');
-        // 最后清理首尾空白
-        userVisibleResponse = userVisibleResponse.trim();
-        
+        // 直接使用后端返回的已处理过的响应内容（不包含状态表等内部信息）
+        const userVisibleResponse = data.response || data.reply || '';
         // 创建助手消息占位符
         const assistantMsgIndex = this.conversationHistory.length
         this.conversationHistory.push({ role: 'assistant', content: '' })
@@ -270,23 +227,31 @@ export const useScenarioStore = defineStore('scenario', {
         this.currentAssistantResponse = ''  // 重置流式输出内容
       }
     },
-
+// 发送消息到后端 - 场景对话模式
     async generateScenario(projectId, useCaseId, title, initialInput) {
       const userStore = useUserStore()
       this.isGenerating = true
       try {
-        const response = await fetch('/api/generate', {
+        // 首先获取或创建场景ID，以便后端能够获取对应的状态表
+        const scenarioData = {
+          projectId,
+          useCaseId,
+          title,
+          initialInput
+        };
+        
+        // 如果有对话历史，也传递这些信息
+        if (this.conversationHistory && this.conversationHistory.length > 0) {
+          scenarioData.conversationHistory = this.conversationHistory;
+        }
+        
+        const response = await fetch('/api/scenarios/generate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Session-Token': userStore.sessionToken
           },
-          body: JSON.stringify({
-            projectId,
-            useCaseId,
-            title,
-            initialInput
-          })
+          body: JSON.stringify(scenarioData)
         })
         if (!response.ok) throw new Error('生成场景失败')
         const data = await response.json()
@@ -299,12 +264,12 @@ export const useScenarioStore = defineStore('scenario', {
         this.isGenerating = false
       }
     },
-
+// 发送消息到后端 - 简单场景对话模式
     async generateSimpleScenario(projectId, useCaseId, title, initialInput) {
       const userStore = useUserStore()
       this.isGenerating = true
       try {
-        const response = await fetch('/api/generate-simple', {
+        const response = await fetch('/api/scenarios/generate-simple', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -331,7 +296,7 @@ export const useScenarioStore = defineStore('scenario', {
         this.isGenerating = false
       }
     },
-
+// 统计已收集的项目数量
     clearConversation() {
       this.conversationHistory = []
       this.statusTable = null

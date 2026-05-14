@@ -57,8 +57,8 @@ onMounted(() => {// 检查是否已登录，页面一挂载就执行此函数。
     router.push('/projects');
   }
 });
-
-const handleLogin = async () => {//async函数，用于处理登录操作，等待登录API返回
+//async函数，用于处理登录操作，等待登录API返回
+const handleLogin = async () => {
   console.log('点击登录按钮，用户名:', username.value);
   
   if (!username.value.trim()) {
@@ -66,21 +66,18 @@ const handleLogin = async () => {//async函数，用于处理登录操作，等�
     alert('请输入用户名');
     return;
   }
-  
   loading.value = true;
   console.log('开始登录请求...');
-  
   try {
     const result = await userStore.login(username.value);//这个函数在userStore.js中定义，用于登录用户
     console.log('登录API返回:', result);
     
     alert('登录成功！');
     console.log('准备跳转到/projects');
-    
     // 等待状态更新
     await new Promise(resolve => setTimeout(resolve, 100));
-    
     // 使用replace而不是push，避免浏览器后退按钮问题
+    //这样设计确保了用户登录后，即使点击浏览器后退按钮也不会回到登录页面，提供了更好的用户体验
     router.replace('/projects');
     console.log('路由跳转指令已发送');
     

@@ -1,0 +1,66 @@
+
+4.4生成每个模块的接口说明。
+
+4.4.1用户管理模块
+4.4.1.1用户登录功能
+前端在LoginView.vue中通过handleLogin方法调用userStore.login方法，该方法发送POST请求到/api/users/init接口。后端在server/routes/users/index.js中定义了这个接口，接口接收用户名参数后调用database.js中的userModel.findOrCreate方法查找或创建用户记录，然后调用userModel.createSession方法创建会话记录，最后返回用户信息和会话令牌。
+4.4.1.2用户注销功能
+前端通过App.vue中的handleDeleteAccount方法调用DELETE /api/users/delete-account接口，后端在server/routes/users/index.js中定义该接口，接口验证会话后调用database.js中的userModel.deleteUserAccount方法删除用户及其所有相关数据，并利用数据库外键约束的ON DELETE CASCADE特性自动删除关联的项目、用例、场景和消息数据，完成操作后销毁会话并返回成功响应。
+
+4.4.2项目管理模块
+4.4.2.1创建项目功能
+前端在RequirementInput.vue中调用projectStore.createProject方法，该方法发送POST请求到/api/projects接口。后端在server/routes/projects/index.js中定义该接口，接口验证会话后调用userModel.createProject方法创建项目记录，然后返回项目信息。
+4.4.2.2获取用户项目列表功能
+前端通过projectStore.fetchUserProjects方法发送GET请求到/api/projects/user-projects接口。后端在server/routes/projects/index.js中定义该接口，接口验证会话后调用userModel.getProjectsByUser方法获取用户的所有项目并返回。
+4.4.2.3生成UML图功能
+前端在RequirementInput.vue中调用projectStore.generateUML方法，该方法发送POST请求到/api/projects/:id/generate-uml接口。后端在server/routes/projects/index.js中定义该接口，接口验证会话和项目权限后调用generateUMLWithAI函数生成PlantUML代码，然后提取用例并调用userModel.createUseCase方法创建用例记录，最后返回UML代码和用例列表。
+4.4.2.4获取项目用例列表功能
+前端通过projectStore.fetchUseCases方法发送GET请求到/api/projects/:id/use-cases接口。后端在server/routes/projects/index.js中定义该接口，接口验证会话和项目权限后调用useCaseModel.getUseCasesByProject方法获取项目的用例列表并返回。
+
+4.4.3用例管理模块
+4.4.3.1获取用例列表功能
+前端通过useCaseStore或其他模块调用API获取用例列表，发送GET请求到/api/usecases接口。后端在server/routes/usecases/index.js中定义该接口，接口验证会话后调用useCaseModel.getUseCasesByProject方法获取指定项目的用例列表，并结合scenarioModel.getScenarioByUseCase检查用例是否有场景图代码来确定用例状态，最后返回格式化的用例列表。
+4.4.3.2更新用例状态功能
+前端通过useCaseStore或其他模块调用API更新用例状态，发送PUT请求到/api/usecases/:id/status接口。后端在server/routes/usecases/index.js中定义该接口，接口验证会话后调用useCaseModel.updateUseCaseStatus方法更新用例状态并返回成功响应。
+
+4.4.4场景对话模块
+4.4.4.1发送消息到场景对话功能
+前端在ChatView.vue中调用scenarioStore.sendMessage方法，该方法发送POST请求到/api/scenarios/:useCaseId/chat接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后调用callDeepSeekAPI函数与AI进行对话，根据用户输入更新状态表并返回AI回复，同时调用messageModel.saveMessage方法保存消息记录。
+4.4.4.2获取对话消息历史功能
+前端在ChatView.vue中调用API获取对话历史，发送GET请求到/api/scenarios/:useCaseId/messages接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后调用messageModel.getMessageHistory方法获取指定场景的消息历史并返回。
+4.4.4.3生成场景功能
+前端在ChatView.vue中调用scenarioStore.generateScenario方法，该方法发送POST请求到/api/scenarios/:useCaseId/generate接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后调用callSimpleScenarioAPI函数生成场景内容，并调用scenarioModel.updateScenarioContent方法更新场景内容到数据库。
+4.4.4.4简单生成场景功能
+前端在ChatView.vue中调用scenarioStore.generateSimpleScenario方法，该方法发送POST请求到/api/scenarios/:useCaseId/generate-simple接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后执行简单的场景生成功能。
+4.4.4.5保存编辑后的场景功能
+前端在ChatView.vue中调用scenarioStore.saveEditedScenario方法，该方法发送POST请求到/api/scenarios/:useCaseId/save-edited接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后调用scenarioModel.updateScenarioContent方法更新编辑后的场景内容到数据库。
+4.4.4.6生成场景图功能
+前端在UseCaseDiagramView.vue中调用API生成场景图，发送POST请求到/api/scenarios/:useCaseId/generate-diagram接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后根据场景内容生成PlantUML代码并返回。
+4.4.4.7获取场景内容功能
+前端调用API获取场景内容，发送GET请求到/api/scenarios/:useCaseId/get-scenario接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后从数据库获取场景内容并返回。
+4.4.4.8获取场景图代码功能
+前端调用API获取场景图代码，发送GET请求到/api/scenarios/:useCaseId/diagram接口。后端在server/routes/scenarios/index.js中定义该接口，接口验证会话后从数据库获取场景的PlantUML代码并返回。
+
+4.4.5图表生成模块
+4.4.5.1渲染PlantUML功能
+前端通过UMLDiagram组件或其他组件调用API渲染PlantUML，发送POST请求到/api/plantuml/render接口。后端在server/routes/plantuml/index.js中定义该接口，接口接收PlantUML代码后将其转换为SVG图像并返回。
+
+4.5生成模块间的接口说明。
+
+4.5.1用户管理模块与其他模块通信：
+用户管理模块前端通过userStore提供用户认证信息，后端通过validateSession中间件验证会话，将用户ID(req.session.user_id)传递给其他模块进行权限验证。接口形式：req.session.user_id, X-Session-Token请求头。
+
+4.5.2项目管理模块与用例管理模块通信：
+项目管理模块前端组件RequirementInput.vue调用projectStore.generateUML(projectId, requirementText)方法，该方法通过HTTP POST接口/api/projects/:id/generate-uml向后端路由发送请求，请求体携带{requirementText}。后端路由收到请求后，调用generateUMLWithAI函数生成PlantUML代码，提取用例列表（每个用例包含名称、描述等），随后循环调用userModel.createUseCase(useCaseData)接口，将每个用例写入数据库的用例表。
+
+4.5.3用例管理模块与场景对话模块通信：
+用例管理模块通过前端UseCaseList.vue组件传递用例信息给场景对话模块，调用scenarioStore.switchToScenario(projectId, useCaseId, useCaseName, actorName)方法。场景对话模块接收用例上下文信息（projectId, useCaseId, useCaseName, actorName），用于构建对话上下文。接口形式：context.useCaseId, context.projectId, context.useCaseName, context.actorName。
+
+4.5.4场景对话模块与图表生成模块通信：
+场景对话模块完成后，前端UseCaseDiagramView.vue组件调用API通过HTTP POST接口/api/scenarios/:useCaseId/generate-diagram向后端发送请求，将完成的场景内容传递给图表生成模块。后端接收到场景内容后，调用PlantUML渲染服务生成可视化图表，最终将图表代码存储到数据库并通过/api/scenarios/:useCaseId/diagram接口返回。
+
+4.5.5数据库模块与所有其他模块通信：
+数据库模块（database.js及相关model文件）为所有其他模块提供统一的数据存取接口。接口形式包括：db实例和各种model方法如userModel.findOrCreate(), projectModel.createProject(), useCaseModel.getUseCasesByProject(), scenarioModel.updateScenarioContent()等。
+
+4.5.6AI集成模块与场景对话模块通信：
+AI集成模块通过callDeepSeekAPI()和callSimpleScenarioAPI()函数为场景对话模块和图表生成模块提供DeepSeek API调用能力。接口形式为函数调用，前端通过scenarioStore.sendMessage()等方法触发AI对话，后端在scenarios路由中调用AI函数并处理返回结果。

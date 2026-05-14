@@ -1,7 +1,12 @@
 const express = require('express');
+const { validateSession } = require('../auth/session');
+const { db } = require('../../database');
+const UserModel = require('../../database/models/user');
+const { createInitialStatusTable } = require('../../utils');
+
+const userModel = new UserModel(db);
+
 const router = express.Router();
-const { userModel } = require('../database');
-const { createInitialStatusTable } = require('../utils');
 
 // 用户初始化/登录
 router.post('/init', async (req, res) => {
@@ -14,11 +19,7 @@ router.post('/init', async (req, res) => {
         const cleanUsername = username.trim();
         const user = userModel.findOrCreate(cleanUsername);
         const session = userModel.createSession(user.id);
-        
-        // 暂时注释掉有问题的代码，返回空数组
-        // const unfinishedScenarios = userModel.getUnfinishedScenarios(user.id);
         const unfinishedScenarios = [];
-        
         //返回用户信息和会话令牌
         res.json({
             success: true,

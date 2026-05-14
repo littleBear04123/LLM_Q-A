@@ -1,0 +1,65 @@
+这里是项目的所有接口。
+项目完整API接口清单，主要负责前后端通信。
+1. 用户相关接口 (/api/users)
+POST /api/users/init - 用户初始化/登录
+DELETE /api/users/delete-account - 删除用户账户及其所有数据
+2. 项目相关接口 (/api/projects)
+POST /api/projects - 创建新项目
+GET /api/projects/user-projects - 获取用户的所有项目
+POST /api/projects/:id/generate-uml - 生成UML用例图
+GET /api/projects/:id/use-cases - 获取项目的所有用例
+DELETE /api/projects/:id - 删除项目及其所有相关数据
+3. 用例相关接口 (/api/usecases)
+GET /api/usecases - 获取用例列表（需传入projectId参数）
+PUT /api/usecases/:id/status - 更新用例状态
+4. 场景相关接口 (/api/scenarios)
+POST /api/scenarios/:useCaseId/chat - 发送消息到场景对话
+POST /api/scenarios/:useCaseId/generate - 生成最终场景
+POST /api/scenarios/:useCaseId/generate-simple - 简单生成场景
+POST /api/scenarios/:useCaseId/save-edited - 保存编辑后的场景
+POST /api/scenarios/:useCaseId/generate-diagram - 生成场景图
+GET /api/scenarios/:useCaseId/messages - 获取对话消息历史
+GET /api/scenarios/:useCaseId/get-scenario - 获取场景内容
+GET /api/scenarios/:useCaseId/diagram - 获取场景图代码
+5. 聊天相关接口 (/api/chat)
+POST /api/chat - 通用聊天接口，支持场景对话和通用聊天
+6. PlantUML相关接口 (/api/plantuml)
+POST /api/plantuml/render - 渲染PlantUML代码为SVG图像（此接口在两个地方定义）
+7. 健康检查接口 (/api/health)
+GET /api/health - 检查服务器健康状态
+8. 主要API路由聚合 (/api)
+/api/usecases - 用例相关所有接口
+/api/scenarios - 场景相关所有接口
+/api/plantuml - PlantUML渲染接口
+认证机制
+所有需要认证的接口都使用了 validateSession 或 sessionMiddleware 中间件进行会话验证
+通过 x-session-token 请求头进行身份验证。
+
+这是数据库清单，主要负责后端与数据库通信。
+在database.js文件中，实际定义的数据库接口函数都在userModel对象中，包括：
+- `findOrCreate(username)` - 查找或创建用户
+- `createSession(userId)` - 创建用户会话
+- `getSessionByToken(token)` - 根据令牌获取会话
+- `updateSessionActivity(sessionId)` - 更新会话活动时间
+- `createProject(userId, projectName, description, requirementText)` - 创建项目
+- `getProjectsByUser(userId)` - 获取用户的所有项目
+- `updateProjectUML(projectId, plantUmlCode)` - 更新项目的UML代码
+- `createUseCase(projectId, useCaseName, actor, description)` - 创建用例
+- `getUseCasesByProject(projectId)` - 获取项目的用例列表
+- `updateUseCaseStatus(useCaseId, status)` - 更新用例状态
+- `clearUseCasesByProject(projectId)` - 清理项目的全部用例
+- `checkProjectAccess(projectId, userId)` - 检查项目访问权限
+- `getUnfinishedScenarios(userId)` - 获取未完成的场景
+- `createScenario(useCaseId, title, initialInput)` - 创建场景
+- `getScenariosByUseCase(useCaseId)` - 获取用例的场景列表
+- `updateScenarioContent(scenarioId, generatedScenario, statusTable, scenarioPlantUmlCode)` - 更新场景内容
+- `getScenarioByUseCase(useCaseId)` - 根据用例获取场景
+- `saveMessage(scenarioId, role, content)` - 保存消息
+- `getMessageHistory(scenarioId, limit)` - 获取消息历史
+- `getSessionById(sessionId)` - 根据ID获取会话
+- `updateSessionActivity(sessionId)` - 更新会话活动时间（重复定义）
+- `updateScenarioStatusTable(scenarioId, statusTable)` - 更新场景状态表
+- `getScenarioStatusTable(scenarioId)` - 获取场景状态表
+- `deleteUserAccount(userId)` - 删除用户及其所有相关数据
+- `deleteProject(projectId, userId)` - 删除项目及其所有相关数据
+        

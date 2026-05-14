@@ -11,18 +11,17 @@ export const useProjectStore = defineStore('project', {
   }),
 
   getters: {
-    hasProjects: (state) => state.projects.length > 0,
-    completedUseCases: (state) => state.useCases.filter(uc => uc.status === 'completed'),
-    pendingUseCases: (state) => state.useCases.filter(uc => uc.status === 'pending'),
-    currentProjectId: (state) => state.currentProject?.id || null
+    hasProjects: (state) => state.projects.length > 0,//是否有项目
+    completedUseCases: (state) => state.useCases.filter(uc => uc.status === 'completed'),//已完成的用例
+    pendingUseCases: (state) => state.useCases.filter(uc => uc.status === 'pending'),//待完成的用例
+    currentProjectId: (state) => state.currentProject?.id || null//当前项目的ID
   },
 
   actions: {
-    // 获取用户的所有项目
+    // 展示用户的所有项目
     async fetchUserProjects() {
       const userStore = useUserStore()
       this.isLoading = true
-
       try {
         console.log('获取用户项目列表...')
         console.log('当前会话Token:', userStore.sessionToken)
@@ -44,13 +43,12 @@ export const useProjectStore = defineStore('project', {
             const errorText = await response.text()
             throw new Error(`获取项目列表失败: ${response.status} - ${errorText}`)
         }
-
         const data = await response.json()
         console.log('项目列表响应:', data)
         this.projects = data.projects || []
         return this.projects
       } catch (error) {
-        console.error('Fetch projects error:', error)
+        console.error('获取项目列表出错:', error)
         throw error
       } finally {
         this.isLoading = false
@@ -61,7 +59,6 @@ export const useProjectStore = defineStore('project', {
     async createProject(projectData) {
       const userStore = useUserStore()
       this.isLoading = true
-
       try {
         console.log('创建项目:', projectData)
         const response = await fetch('/api/projects', {
@@ -211,7 +208,7 @@ export const useProjectStore = defineStore('project', {
       } else {
         this.currentUMLCode = '';
       }
-      // 切换项目时强制清空用例列表，确保数据隔离
+      // 切换项目时强制清空用例列表，避免不同项目之间的数据相互影响。
       this.useCases = [];
     },
 

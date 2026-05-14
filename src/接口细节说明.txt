@@ -1,0 +1,257 @@
+
+4.4.1 用户管理模块接口
+
+4.4.1.1 POST /api/users/init - 用户初始化/登录接口
+（1）功能：用于用户登录或初始化，如果用户不存在则创建新用户
+（2）模块归属：用户管理模块
+（3）参数要求：
+请求方式：POST
+请求头：Content-Type: application/json
+请求体：{ "username": string }
+返回值：{ "success": boolean, "user": { "id": number, "username": string }, "session": { "token": string, "id": number }, "hasUnfinishedScenario": boolean, "unfinishedScenario": object }
+（4）用途：用户登录认证，建立会话
+（5）说明：POST /api/users/init 是一个用户初始化/登录接口，它属于用户模块。该接口的主要功能是接收前端传递的用户名，然后在数据库中查找或创建用户，并生成一个新的会话令牌返回给前端。这个接口与前端的LoginView.vue组件和userStore.js中的login方法相匹配。接口要求参数为JSON格式的请求体，其中必须包含非空的username字段。接口返回包括用户信息(id和username)、会话令牌(sessionToken和sessionId)以及其他相关信息。
+该接口的实现逻辑是：首先验证请求体中的用户名参数，如果用户名为空则返回错误；然后调用UserModel的findOrCreate方法查找或创建用户；接着调用createSession方法为用户创建新的会话；最后返回用户信息和会话数据。接口采用POST请求方式，符合RESTful API的设计规范，专门用于用户初始化和登录场景。
+
+4.4.1.2 DELETE /api/users/delete-account - 删除用户账户及其所有数据接口
+（1）功能：删除用户账户及其所有相关数据（项目、用例、场景、消息等）
+（2）模块归属：用户管理模块
+（3）参数要求：
+  请求方式：DELETE
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "message": string }
+（5）用途：用户注销，删除账户及所有相关数据
+
+4.4.2 项目管理模块接口
+
+4.4.2.1 POST /api/projects - 创建新项目接口
+（1）功能：创建新项目并保存到数据库
+（2）模块归属：项目管理模块
+（3）参数要求：
+  请求方式：POST
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "projectName": string, "description": string, "requirementText": string }
+（4）返回值：{ "success": boolean, "project": { "id": number, "projectName": string, "description": string, "requirementText": string } }
+（5）用途：用户创建新项目
+
+4.4.2.2 GET /api/projects/user-projects - 获取用户的所有项目接口
+（1）功能：获取当前登录用户的所有项目列表
+（2）模块归属：项目管理模块
+（3）参数要求：
+  请求方式：GET
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "projects": array }
+（5）用途：展示用户的所有项目
+
+4.4.2.3 POST /api/projects/:id/generate-uml - 生成UML用例图接口
+（1）功能：根据需求描述生成UML用例图，并提取用例信息保存到数据库
+（2）模块归属：项目管理模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:id (项目ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "requirementText": string }
+（4）返回值：{ "success": boolean, "plantUmlCode": string, "useCases": array }
+（5）用途：根据需求文本自动生成UML用例图和相关用例
+
+4.4.2.4 GET /api/projects/:id/use-cases - 获取项目的所有用例接口
+（1）功能：获取指定项目的所有用例列表
+（2）模块归属：项目管理模块
+（3）参数要求：
+  请求方式：GET
+  URL参数：:id (项目ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "useCases": array }
+（5）用途：获取特定项目的所有用例信息
+
+4.4.2.5 DELETE /api/projects/:id - 删除项目及其所有相关数据接口
+（1）功能：删除指定项目及其所有相关数据（用例、场景、消息等）
+（2）模块归属：项目管理模块
+（3）参数要求：
+  请求方式：DELETE
+  URL参数：:id (项目ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "message": string }
+（5）用途：删除项目及所有关联数据
+
+4.4.3 用例管理模块接口
+
+4.4.3.1 GET /api/usecases - 获取用例列表接口
+（1）功能：根据项目ID获取用例列表
+（2）模块归属：用例管理模块
+（3）参数要求：
+  请求方式：GET
+  查询参数：projectId (项目ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "useCases": array }
+（5）用途：获取指定项目的所有用例
+
+4.4.3.2 PUT /api/usecases/:id/status - 更新用例状态接口
+（1）功能：更新指定用例的状态
+（2）模块归属：用例管理模块
+（3）参数要求：
+  请求方式：PUT
+  URL参数：:id (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "status": string ("pending"|"completed") }
+（4）返回值：{ "success": boolean, "message": string }
+（5）用途：更新用例的完成状态
+
+4.4.4 场景对话模块接口
+
+4.4.4.1 POST /api/scenarios/:useCaseId/chat - 发送消息到场景对话接口
+（1）功能：向指定用例的场景对话中发送消息，并获得AI回复
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:useCaseId (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "message": string, "context": { "projectId": number, "useCaseId": number, "useCaseName": string, "actorName": string } }
+（4）返回值：{ "response": string, "statusTable": object }
+（5）用途：实现与AI的交互对话，推进场景构建过程
+
+4.4.4.2 POST /api/scenarios/:useCaseId/generate - 生成最终场景接口
+（1）功能：基于对话历史生成完整的场景描述
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:useCaseId (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "projectId": number, "useCaseId": number, "title": string, "initialInput": string, "conversationHistory": array }
+（4）返回值：{ "success": boolean, "scenario": string }
+（5）用途：生成最终的场景描述文本
+
+4.4.4.3 POST /api/scenarios/:useCaseId/generate-simple - 简单生成场景接口
+（1）功能：简单地生成场景描述
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:useCaseId (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "projectId": number, "useCaseId": number, "title": string, "initialInput": string }
+（4）返回值：{ "success": boolean, "scenario": string }
+（5）用途：快速生成场景内容
+
+4.4.4.4 POST /api/scenarios/:useCaseId/save-edited - 保存编辑后的场景接口
+（1）功能：保存用户编辑后的场景内容
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:useCaseId (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "projectId": number, "useCaseId": number, "content": string }
+（4）返回值：{ "success": boolean, "message": string }
+（5）用途：保存用户手动编辑的场景内容
+
+4.4.4.5 POST /api/scenarios/:useCaseId/generate-diagram - 生成场景图接口
+（1）功能：根据场景内容生成PlantUML图表代码
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：POST
+  URL参数：:useCaseId (用例ID)
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "content": string }
+（4）返回值：{ "success": boolean, "diagramCode": string }
+（5）用途：将场景内容转换为可视化图表代码
+
+4.4.4.6 GET /api/scenarios/:useCaseId/messages - 获取对话消息历史接口
+（1）功能：获取指定用例的对话消息历史
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：GET
+  URL参数：:useCaseId (用例ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "messages": array }
+（5）用途：获取之前与AI的对话历史
+
+4.4.4.7 GET /api/scenarios/:useCaseId/get-scenario - 获取场景内容接口
+（1）功能：获取指定用例的场景内容
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：GET
+  URL参数：:useCaseId (用例ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "scenario": string }
+（5）用途：获取已生成的场景内容
+
+4.4.4.8 GET /api/scenarios/:useCaseId/diagram - 获取场景图代码接口
+（1）功能：获取指定用例的场景图代码
+（2）模块归属：场景对话模块
+（3）参数要求：
+  请求方式：GET
+  URL参数：:useCaseId (用例ID)
+  请求头：X-Session-Token (会话令牌)
+（4）返回值：{ "success": boolean, "diagramCode": string }
+（5）用途：获取已生成的场景图PlantUML代码
+
+4.4.5 聊天相关模块接口
+
+4.4.5.1 POST /api/chat - 通用聊天接口
+（1）功能：支持场景对话和通用聊天
+（2）模块归属：聊天模块
+（3）参数要求：
+  请求方式：POST
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "message": string, "context": { "projectId": number, "useCaseId": number, "useCaseName": string, "actorName": string } }
+（4）返回值：{ "response": string, "statusTable": object }
+（5）用途：通用聊天功能，主要用于场景对话
+
+4.4.6 图表生成模块接口
+
+4.4.6.1 POST /api/plantuml/render - 渲染PlantUML代码为SVG图像接口
+（1）功能：将PlantUML代码转换为SVG图像
+（2）模块归属：图表生成模块
+（3）参数要求：
+  请求方式：POST
+  请求头：Content-Type: application/json, X-Session-Token (会话令牌)
+  请求体：{ "plantumlCode": string }
+（4）返回值：SVG图像内容
+（5）用途：将PlantUML代码渲染成可视化的图表
+
+4.4.7 健康检查模块接口
+
+4.4.7.1 GET /api/health - 检查服务器健康状态接口
+（1）功能：检查服务器是否正常运行
+（2）模块归属：系统健康检查模块
+（3）参数要求：
+  请求方式：GET
+  请求头：X-Session-Token (可选)
+（4）返回值：服务器健康状态信息
+（5）用途：监控服务器运行状态
+
+4.4.8 数据库模块接口（后端内部使用）
+
+4.4.8.1 用户相关数据库接口
+（1）findOrCreate(username): 查找或创建用户
+（2）createSession(userId): 创建用户会话
+（3）getSessionByToken(token): 根据令牌获取会话
+（4）deleteUserAccount(userId): 删除用户及其所有相关数据
+
+4.4.8.2 项目相关数据库接口
+（1）createProject(userId, projectName, description, requirementText): 创建项目
+（2）getProjectsByUser(userId): 获取用户的所有项目
+（3）updateProjectUML(projectId, plantUmlCode): 更新项目的UML代码
+（4）deleteProject(projectId, userId): 删除项目及其所有相关数据
+
+4.4.8.3 用例相关数据库接口
+（1）createUseCase(projectId, useCaseName, actor, description): 创建用例
+（2）getUseCasesByProject(projectId): 获取项目的用例列表
+（3）updateUseCaseStatus(useCaseId, status): 更新用例状态
+（4）clearUseCasesByProject(projectId): 清理项目的全部用例
+
+4.4.8.4 场景相关数据库接口
+（1）createScenario(useCaseId, title, initialInput): 创建场景
+（2）getScenariosByUseCase(useCaseId): 获取用例的场景列表
+（3）updateScenarioContent(scenarioId, generatedScenario, statusTable, scenarioPlantUmlCode): 更新场景内容
+（4）getScenarioByUseCase(useCaseId): 根据用例获取场景
+（5）updateScenarioStatusTable(scenarioId, statusTable): 更新场景状态表
+（6）getScenarioStatusTable(scenarioId): 获取场景状态表
+
+4.4.8.5 消息相关数据库接口
+（1）saveMessage(scenarioId, role, content): 保存消息
+（2）getMessageHistory(scenarioId, limit): 获取消息历史
+
+4.4.9 认证机制说明
+（1）所有需要认证的接口都使用validateSession中间件进行会话验证
+（2）通过X-Session-Token请求头传递会话令牌进行身份验证
+（3）会话信息存储在req.session对象中，包含user_id等用户标识信息
